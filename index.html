@@ -354,7 +354,7 @@ input[type=color]{width:100%;height:34px;background:none;border:1px solid var(--
   const RENDER_SCALE = EXPORT_WIDTH / 720;
   const VIDEO_BITRATE = 12000000;       // 12 Mbps - MediaRecorder's default (~2.5 Mbps) looks blocky at 1080p
   const AUDIO_BITRATE = 192000;
-  const WATERMARK_TEXT = 'Relationship Cues';
+  const WATERMARK_TEXT = 'RishtaLogic';
   // Devanagari-safe font stack: Hindi captions render crisp/bold on Noto Sans Devanagari
   // (the -apple-system/Segoe UI fallback used earlier renders Hindi thin and low-contrast).
   const CANVAS_FONT_STACK = '"Noto Sans Devanagari","Poppins",-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif';
@@ -372,7 +372,7 @@ input[type=color]{width:100%;height:34px;background:none;border:1px solid var(--
   } else {
     fontsReady = true;
   }
-  const MAX_TOTAL_SECONDS = 59;
+  const MAX_TOTAL_SECONDS = Infinity; // no cap on total video length
   const LEFT_PAD = 40;
   const RIGHT_PAD = 40;
   const HIGHLIGHT_COLOR = '#3EE8AE';
@@ -523,6 +523,8 @@ input[type=color]{width:100%;height:34px;background:none;border:1px solid var(--
   let rafId = null;
 
   let audioCtx = null, audioDestination = null, audioGraphReady = false;
+  let boundAudioSourceEl = null;          // which element (video / narrationAudio) the graph is currently wired to
+  const mediaSourceNodeCache = new WeakMap(); // element -> MediaElementAudioSourceNode (createMediaElementSource may only run once per element, ever)
   let isRecording = false;
   let mediaRecorder = null;
   let recordedChunks = [];
@@ -579,6 +581,9 @@ input[type=color]{width:100%;height:34px;background:none;border:1px solid var(--
   mediaInput.addEventListener('change', function(e){
     const files = Array.from(e.target.files || []);
     if(!files.length) return;
+
+    // Re-upload: release the previous batch's blob URLs before replacing them, or they leak for the rest of the session.
+    if(rawClipsCache) rawClipsCache.forEach(function(c){ if(c.url) URL.revokeObjectURL(c.url); });
 
     dropLabel.textContent = files.length + ' file(s) selected — loading...';
     btnPlay.disabled = true;
@@ -676,6 +681,8 @@ input[type=color]{width:100%;height:34px;background:none;border:1px solid var(--
   foregroundInput.addEventListener('change', function(e){
     const files = Array.from(e.target.files || []);
     if(!files.length) return;
+    // Release the previous batch's blob URLs before replacing them.
+    fgImagesCache.forEach(function(img){ if(img && img.src) URL.revokeObjectURL(img.src); });
     fgDropLabel.textContent = files.length + ' layer(s) loading...';
     let loaded = 0;
     const imgs = new Array(files.length);
@@ -696,8 +703,7 @@ input[type=color]{width:100%;height:34px;background:none;border:1px solid var(--
 
   cinematicGradeToggle.addEventListener('change', function(){ if(hasClips && !previewing && !isRecording) drawStaticFrame(); });
 
-  // No narration track attached: old behaviour — play clips back to back, trimming/holding
-  // the last one to fit inside MAX_TOTAL_SECONDS.
+  // No narration track attached: play every clip back to back at full length — no total-length cap anymore.
   function trimClipsToFit(rawClips){
     let cum = 0;
     const finalClips = [];
@@ -714,9 +720,6 @@ input[type=color]{width:100%;height:34px;background:none;border:1px solid var(--
       });
       cum += used;
     });
-    if(finalClips.length && cum < effectiveMaxSeconds - 0.05){
-      finalClips[finalClips.length - 1].usedDuration += (effectiveMaxSeconds - cum);
-    }
     return finalClips;
   }
 
@@ -845,10 +848,10 @@ input[type=color]{width:100%;height:34px;background:none;border:1px solid var(--
       clipListEl.appendChild(li);
     });
     totalLine.style.display = 'block';
-    totalLine.innerHTML = 'Total used: <strong>' + fmtTime(effectiveDuration) + '</strong> / ' + Math.round(effectiveMaxSeconds) + 's max' + (wordTimestamps ? ' (audio track length se set)' : '');
+    totalLine.innerHTML = 'Total used: <strong>' + fmtTime(effectiveDuration) + '</strong>' + (wordTimestamps ? ' (audio track length se set)' : '');
     if(rawCount > displayClips.length || displayClips.some(c => c.trimmed)){
       lengthWarn.style.display = 'block';
-      lengthWarn.textContent = 'Combined length ' + Math.round(effectiveMaxSeconds) + ' second se zyaada thi — extra hissa/clips trim/skip kar diye gaye.';
+      lengthWarn.textContent = 'Kuch clips trim/skip ho gaye — file load karte waqt issue aaya tha.';
     } else {
       lengthWarn.style.display = 'none';
     }
@@ -892,13 +895,16 @@ input[type=color]{width:100%;height:34px;background:none;border:1px solid var(--
   });
 
   // ---------- Activation (video plays; image just starts a timer) ----------
+  let currentEndedHandler = null;
   function activateClip(idx, onReady){
     const c = clips[idx];
+    if(currentEndedHandler){ video.removeEventListener('ended', currentEndedHandler); currentEndedHandler = null; }
     if(c.type === 'video'){
       video.pause();
       c.videoEndedAt = null;
       video.playbackRate = c.playbackRate || 1;
       const endedHandler = function(){ c.videoEndedAt = performance.now(); };
+      currentEndedHandler = endedHandler;
       video.addEventListener('ended', endedHandler, { once: true });
       const handler = function(){
         video.removeEventListener('loadeddata', handler);
@@ -1777,9 +1783,11 @@ input[type=color]{width:100%;height:34px;background:none;border:1px solid var(--
       if(!keepScript && whisperText !== null) paragraphInput.value = toProperCase(whisperText);
       invalidateWordTimes();
 
-      effectiveMaxSeconds = Math.min(MAX_TOTAL_SECONDS, AUDIO_LEAD_PAD + narrationDuration + AUDIO_TAIL_PAD);
+      effectiveMaxSeconds = AUDIO_LEAD_PAD + narrationDuration + AUDIO_TAIL_PAD; // narration track sets the length, no upper cap
       const paddedBuffer = padAudioBuffer(decoded.original);
+      const oldNarrationUrl = narrationAudio.src;
       narrationAudio.src = URL.createObjectURL(bufferToWav(paddedBuffer));
+      if(oldNarrationUrl) URL.revokeObjectURL(oldNarrationUrl); // release the previous track's blob URL
       audioGraphReady = false; // rebuild the export audio graph against the (now padded) narration track
 
       if(rawClipsCache) finalizeClips(rawClipsCache);
@@ -2277,15 +2285,25 @@ input[type=color]{width:100%;height:34px;background:none;border:1px solid var(--
   }
 
   function ensureAudioGraph(){
-    if(audioGraphReady) return true;
+    const sourceEl = narrationAudio.src ? narrationAudio : video;
+    // Already wired to the right element for this export - nothing to do.
+    if(audioGraphReady && boundAudioSourceEl === sourceEl) return true;
     try{
-      const AudioCtx = window.AudioContext || window.webkitAudioContext;
-      audioCtx = new AudioCtx();
-      const sourceEl = narrationAudio.src ? narrationAudio : video;
-      const source = audioCtx.createMediaElementSource(sourceEl);
+      if(!audioCtx){
+        const AudioCtx = window.AudioContext || window.webkitAudioContext;
+        audioCtx = new AudioCtx();
+      }
+      // createMediaElementSource() may only ever be called once per <video>/<audio> element,
+      // even across different AudioContexts - so cache and reuse the node instead of recreating it.
+      let source = mediaSourceNodeCache.get(sourceEl);
+      if(!source){
+        source = audioCtx.createMediaElementSource(sourceEl);
+        mediaSourceNodeCache.set(sourceEl, source);
+        source.connect(audioCtx.destination); // keep local playback audible
+      }
       audioDestination = audioCtx.createMediaStreamDestination();
       source.connect(audioDestination);
-      source.connect(audioCtx.destination);
+      boundAudioSourceEl = sourceEl;
       audioGraphReady = true;
     }catch(err){ audioGraphReady = false; }
     return audioGraphReady;
@@ -2451,7 +2469,7 @@ input[type=color]{width:100%;height:34px;background:none;border:1px solid var(--
 <script>
 (function(){
   var $=function(i){return document.getElementById(i);};
-  var cv=$('coverCanvas'), cx=cv.getContext('2d'), W=1080, H=1350, img=null, raf=0, ov={}, hits=[], dims={w:W,h:H}, move=false, drag=null;
+  var cv=$('coverCanvas'), cx=cv.getContext('2d'), W=1080, H=1350, img=null, raf=0, ov={}, hits=[], dims={w:W,h:H}, drag=null;
   var STACK='"Poppins","Noto Sans Devanagari",-apple-system,"Segoe UI",sans-serif';
   var c={title:$('cvTitle'),size:$('cvSize'),top:$('cvTop'),scrim:$('cvScrim'),zoom:$('cvZoom'),px:$('cvPosX'),py:$('cvPosY'),enh:$('cvEnhance'),caps:$('cvCaps'),tc:$('cvTextColor'),hc:$('cvHiColor'),sub:$('cvSub')};
   function val(n){ var r=document.querySelector('input[name="'+n+'"]:checked'); return r?r.value:''; }
@@ -2569,7 +2587,8 @@ input[type=color]{width:100%;height:34px;background:none;border:1px solid var(--
 
   $('cvFile').addEventListener('change',function(){
     var f=this.files&&this.files[0]; if(!f) return;
-    var im=new Image(); im.onload=function(){ img=im; $('cvFileLabel').textContent='✓ '+f.name; draw(); };
+    var oldSrc=img&&img.src;
+    var im=new Image(); im.onload=function(){ img=im; $('cvFileLabel').textContent='✓ '+f.name; draw(); if(oldSrc) URL.revokeObjectURL(oldSrc); };
     im.src=URL.createObjectURL(f);
   });
 
