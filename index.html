@@ -265,7 +265,7 @@ input[type=color]{width:100%;height:34px;background:none;border:1px solid var(--
 </div>
 
 <footer class="foot">
-  Sab browser mein hi process hota hai, koi upload nahi. Export webm/mp4 mein hota hai, minimum 1080p (4:5 = 1080×1350, 9:16 = 1080×1920) aur 12 Mbps bitrate par. <strong>Auto-transcribe</strong> ab Hindi/Hinglish audio support karta hai aur Devanagari transcript deta hai (ek baar multilingual Whisper model, ~140-150MB, load hota hai) — <strong>Exact word sync</strong> sirf Roman/English text par kaam karta hai (ek baar alignment model ~95MB load hota hai), isliye Devanagari transcript ko caption box mein Roman/Hinglish mein rewrite karein. Claude ke artifact preview mein sandbox ki wajah se kaam nahi karega, isliye yeh file khud host/open karke test karein.
+  Sab browser mein hi process hota hai, koi upload nahi. Export webm/mp4 mein hota hai, minimum 1080p (4:5 = 1080×1350, 9:16 = 1080×1920) aur 12 Mbps bitrate par. <strong>Auto-transcribe</strong> ab Hindi/Hinglish audio support karta hai aur Devanagari transcript deta hai (ek baar multilingual Whisper model, ~140-150MB, load hota hai) — <strong>Exact word sync</strong> sirf English pronunciation samajhta hai (Hindi mein bola gaya audio Roman-script text ke saath bhi low-confidence rahega); aisi audio par app khud Whisper timing (approx) par switch kar deta hai. Claude ke artifact preview mein sandbox ki wajah se kaam nahi karega, isliye yeh file khud host/open karke test karein.
 </footer>
 </section>
 
@@ -1429,6 +1429,9 @@ input[type=color]{width:100%;height:34px;background:none;border:1px solid var(--
   }
 
   // ----- pick the best timing source for the current caption text (cached per text) -----
+  const EXACT_CONF_MIN = 0.5; // below this the CTC alignment is unreliable (e.g. Hindi speech under Roman-only captions,
+                               // since the exact-sync model only understands English phonemes) — fall back to Whisper timing
+                               // instead of quietly using bad word-level times while just showing a warning.
   function getWordTimes(words){
     const key = words.join(' ');
     if(wordTimesCache && wordTimesCache.key === key && wordTimesCache.ver === alignVersion) return wordTimesCache.result;
@@ -1439,9 +1442,13 @@ input[type=color]{width:100%;height:34px;background:none;border:1px solid var(--
         if(a) result = { mode: 'exact', times: a.times, conf: a.conf };
       }catch(err){ console.warn('Forced alignment failed, using fallback:', err); }
     }
-    if(!result.times && wordTimestamps && wordTimestamps.length){
+    const exactUnreliable = result.mode === 'exact' && result.conf < EXACT_CONF_MIN;
+    if((!result.times || exactUnreliable) && wordTimestamps && wordTimestamps.length){
       const t = mapWhisperToWords(words);
-      if(t) result = { mode: 'whisper', times: t, conf: 0 };
+      if(t){
+        const exactConf = exactUnreliable ? result.conf : undefined; // remember why we fell back, for the status line
+        result = { mode: 'whisper', times: t, conf: 0, exactConf: exactConf };
+      }
     }
     wordTimesCache = { key: key, ver: alignVersion, result: result };
     return result;
@@ -1483,7 +1490,7 @@ input[type=color]{width:100%;height:34px;background:none;border:1px solid var(--
     }
     const screenOfWord = new Int32Array(n);
     screens.forEach(function(sc, k){ for(let w = sc.first; w <= sc.last; w++) screenOfWord[w] = k; });
-    return { screens: screens, screenOfWord: screenOfWord, times: times, mode: sync.mode, conf: sync.conf, timed: !!times };
+    return { screens: screens, screenOfWord: screenOfWord, times: times, mode: sync.mode, conf: sync.conf, exactConf: sync.exactConf, timed: !!times };
   }
 
   // highlighted word = last word whose own start time has passed
@@ -1714,9 +1721,15 @@ input[type=color]{width:100%;height:34px;background:none;border:1px solid var(--
       }
     } else if(plan.mode === 'whisper'){
       transcribeStatus.className = 'status-line';
-      transcribeStatus.textContent = exactSyncToggle.checked
-        ? 'Approx sync (Whisper timing) \u2014 exact-sync model load nahi ho paya, isliye highlight thoda aage/peeche ho sakta hai. Internet check karke audio dobara attach karein.'
-        : 'Exact word sync off hai, Whisper timing use ho rahi hai (approx). Word-to-word match ke liye checkbox on karke audio dobara attach karein.';
+      if(plan.exactConf !== undefined){
+        transcribeStatus.textContent = 'Exact word sync kaam nahi kar paaya (sirf ' + Math.round(plan.exactConf * 100) +
+          '% match \u2014 shayad audio Hindi mein bola gaya hai, jabki exact-sync model sirf English pronunciation samajhta hai). ' +
+          'Whisper timing (approx) par switch kar diya gaya hai, highlight thoda aage/peeche ho sakta hai.';
+      } else {
+        transcribeStatus.textContent = exactSyncToggle.checked
+          ? 'Approx sync (Whisper timing) \u2014 exact-sync model load nahi ho paya, isliye highlight thoda aage/peeche ho sakta hai. Internet check karke audio dobara attach karein.'
+          : 'Exact word sync off hai, Whisper timing use ho rahi hai (approx). Word-to-word match ke liye checkbox on karke audio dobara attach karein.';
+      }
     } else {
       transcribeStatus.className = 'status-line';
       transcribeStatus.textContent = 'Audio attached, lekin word timing nahi mil paayi \u2014 highlight barabar speed se chalega.';
