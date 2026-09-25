@@ -1,0 +1,2756 @@
+<!DOCTYPE html>
+<html lang="hi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Caption Deck + Cover Maker</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Devanagari:wght@400;700;900&family=Poppins:wght@700;800&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#101116;
+    --panel:#1B1D26;
+    --panel-border:#2B2E3A;
+    --text:#F3F2ED;
+    --muted:#8D8FA0;
+    --accent:#F2B705;
+    --highlight:#3EE8AE;
+    --danger:#E5595C;
+    --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{background:var(--bg);color:var(--text);font-family:var(--sans);min-height:100vh;-webkit-font-smoothing:antialiased;}
+  a{color:inherit;}
+  button{font-family:inherit;}
+  :focus-visible{outline:2px solid var(--accent);outline-offset:2px;}
+
+  header.top{padding:9px 14px 8px;border-bottom:1px solid var(--panel-border);display:flex;align-items:baseline;gap:8px;flex-wrap:wrap;}
+  header.top .mark{font-family:var(--mono);font-size:9px;letter-spacing:0.12em;color:var(--highlight);}
+  header.top h1{margin:0;font-size:14px;font-weight:640;letter-spacing:-0.01em;line-height:1.25;}
+  header.top p{margin:0;color:var(--muted);font-size:11px;line-height:1.4;flex:1 1 220px;}
+
+  .app{max-width:1180px;margin:0 auto;padding:12px;display:grid;grid-template-columns:minmax(220px,280px) 1fr;gap:12px;align-items:start;}
+  @media (max-width:860px){ .app{grid-template-columns:1fr;padding:10px;gap:10px;padding-bottom:76px;} header.top{padding:10px;} }
+
+  .stage{position:sticky;top:10px;}
+  @media (max-width:860px){ .stage{position:static;order:-1;} }
+
+  .ratio-switch{display:flex;gap:6px;justify-content:center;margin-bottom:7px;}
+  .ratio-switch .ratio-opt{display:flex;align-items:center;gap:5px;background:var(--panel);border:1px solid var(--panel-border);color:var(--muted);padding:5px 9px;border-radius:6px;font-size:11px;cursor:pointer;transition:border-color 0.15s,color 0.15s;}
+  .ratio-switch .ratio-opt:hover{border-color:var(--highlight);}
+  .ratio-switch .ratio-opt:has(input:checked){border-color:var(--highlight);color:var(--text);}
+  .ratio-switch input{accent-color:var(--highlight);margin:0;cursor:pointer;}
+
+  .frame-wrap{background:#000;border:1px solid var(--panel-border);border-radius:8px;overflow:hidden;position:relative;aspect-ratio:4/5;width:100%;max-width:220px;margin:0 auto;display:flex;align-items:center;justify-content:center;}
+  @media (max-width:860px){ .frame-wrap{max-width:170px;} }
+  canvas#stageCanvas{width:100%;height:100%;display:block;}
+  .frame-empty{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;color:var(--muted);font-size:11px;text-align:center;padding:12px;}
+  .frame-empty .icon{font-family:var(--mono);font-size:18px;color:var(--panel-border);}
+
+  .transport{display:flex;align-items:center;gap:6px;justify-content:center;margin-top:7px;}
+  .transport button{background:var(--panel);border:1px solid var(--panel-border);color:var(--text);padding:5px 10px;border-radius:6px;font-size:12px;cursor:pointer;}
+  .transport button:hover:not(:disabled){border-color:var(--highlight);}
+  .transport button:disabled{opacity:0.35;cursor:not-allowed;}
+  .timecode{font-family:var(--mono);font-size:11px;color:var(--muted);min-width:80px;text-align:center;}
+
+  .panel{display:flex;flex-direction:column;gap:8px;}
+  .card{background:var(--panel);border:1px solid var(--panel-border);border-radius:8px;padding:10px 11px;}
+  .card-head{display:flex;align-items:center;gap:6px;margin-bottom:6px;}
+  .card .step{font-family:var(--mono);font-size:9px;color:var(--highlight);letter-spacing:0.06em;flex:none;}
+  .card h2{margin:0;font-size:12.5px;font-weight:620;line-height:1.25;}
+  .card .hint{margin:0 0 7px;color:var(--muted);font-size:10.5px;line-height:1.35;}
+  .card details{margin:-2px 0 7px;}
+  .card summary{list-style:none;cursor:pointer;font-size:10.5px;color:var(--muted);display:inline-flex;align-items:center;gap:4px;}
+  .card summary::-webkit-details-marker{display:none;}
+  .card summary:before{content:"ⓘ";color:var(--highlight);}
+  .card details[open] summary{margin-bottom:4px;}
+  .card details p{margin:0;color:var(--muted);font-size:10.5px;line-height:1.4;}
+
+  .file-drop{border:1px dashed var(--panel-border);border-radius:7px;padding:9px;text-align:center;cursor:pointer;font-size:11.5px;color:var(--muted);transition:border-color 0.15s;}
+  .file-drop:hover{border-color:var(--highlight);}
+  .file-drop input{display:none;}
+
+  .clip-list{list-style:none;margin:6px 0 0;padding:0;display:flex;flex-direction:column;gap:4px;}
+  .clip-list li{display:flex;align-items:center;justify-content:space-between;gap:8px;background:#14151C;border:1px solid var(--panel-border);border-radius:6px;padding:5px 8px;font-size:11px;}
+  .clip-list li .cname{color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:flex;gap:6px;align-items:center;flex:1 1 auto;min-width:0;}
+  .clip-list li .cdur{font-family:var(--mono);color:var(--muted);flex:none;}
+  .clip-list li.trimmed .cdur{color:var(--accent);}
+  .clip-list li .focus-btn{flex:none;background:none;border:1px solid var(--panel-border);border-radius:5px;color:var(--muted);font-size:11px;line-height:1;padding:3px 5px;cursor:pointer;}
+  .clip-list li .focus-btn:hover{border-color:var(--highlight);color:var(--text);}
+  .clip-list li .focus-btn.active{border-color:var(--highlight);color:var(--highlight);}
+  .focus-hint{display:none;position:absolute;left:0;right:0;bottom:6px;text-align:center;font-size:10.5px;color:#0A0A0A;background:var(--highlight);padding:4px 8px;border-radius:5px;margin:0 8px;pointer-events:none;z-index:2;}
+  .focus-hint.show{display:block;}
+  .total-line{margin-top:6px;font-family:var(--mono);font-size:10.5px;color:var(--muted);}
+  .total-line strong{color:var(--text);}
+  .warn{margin-top:5px;font-size:11px;color:var(--accent);}
+
+  textarea{width:100%;background:#14151C;border:1px solid var(--panel-border);border-radius:6px;color:var(--text);padding:8px 9px;font-family:var(--sans);font-size:12.5px;line-height:1.4;resize:vertical;min-height:64px;}
+  textarea:focus{border-color:var(--highlight);}
+  .opt-row{display:flex;align-items:flex-start;gap:8px;margin:7px 0 0;font-size:11.5px;color:var(--muted);line-height:1.4;cursor:pointer;}
+  .opt-row input{accent-color:var(--highlight);margin:2px 0 0;flex:none;cursor:pointer;}
+  .opt-row strong{color:var(--text);font-weight:600;}
+
+  .btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;background:var(--accent);color:#1A1300;border:none;padding:9px 14px;border-radius:7px;font-size:13px;font-weight:650;cursor:pointer;width:100%;min-height:40px;}
+  .btn:hover:not(:disabled){filter:brightness(1.06);}
+  .btn:disabled{opacity:0.35;cursor:not-allowed;filter:none;}
+
+  .progress-track{height:5px;background:#14151C;border-radius:3px;overflow:hidden;margin-top:8px;}
+  .progress-fill{height:100%;width:0%;background:var(--highlight);transition:width 0.12s linear;}
+  .status-line{margin-top:6px;font-family:var(--mono);font-size:10.5px;color:var(--muted);}
+  .status-line.ready{color:var(--highlight);}
+  .status-line.error{color:var(--danger);}
+
+  .download-box{margin-top:8px;display:none;border:1px solid var(--highlight);background:rgba(62,232,174,0.12);border-radius:7px;padding:9px;text-align:center;}
+  .download-box .size{display:block;margin-top:2px;font-family:var(--mono);font-size:10px;color:var(--muted);}
+
+
+  /* ---- Shared form helpers ---- */
+  .field-label{display:block;margin:9px 0 4px;color:var(--muted);font-size:10.5px;}
+  .field-row{display:flex;align-items:flex-end;justify-content:space-between;gap:8px;margin-top:9px;}
+  .field-row .field-label{margin:0;}
+  input[type=range]{width:100%;accent-color:var(--highlight);margin:4px 0;}
+
+  footer.foot{max-width:1180px;margin:0 auto;padding:5px 14px 14px;color:var(--muted);font-size:10px;line-height:1.45;}
+  @media (max-width:860px){ footer.foot{padding-bottom:90px;} }
+
+  /* Mobile par export ek tap door — is button se seedha export card tak scroll ho jaata hai */
+  .sticky-export{display:none;}
+  @media (max-width:860px){
+    .sticky-export{
+      display:flex;position:fixed;left:0;right:0;bottom:0;z-index:20;
+      padding:8px 10px calc(8px + env(safe-area-inset-bottom));
+      background:linear-gradient(180deg, rgba(16,17,22,0) 0%, var(--bg) 35%);
+      pointer-events:none;
+      opacity:0;transform:translateY(6px);transition:opacity 0.18s, transform 0.18s;
+    }
+    .sticky-export.show{opacity:1;transform:translateY(0);}
+    .sticky-export .btn{pointer-events:auto;box-shadow:0 4px 14px rgba(0,0,0,0.4);}
+  }
+
+/* ===== Deck: swipe slides ===== */
+body{height:100vh;height:100dvh;min-height:0;display:flex;flex-direction:column;overflow:hidden;}
+.deck-nav{flex:none;position:relative;display:flex;gap:4px;padding:6px 10px 7px;border-bottom:1px solid var(--panel-border);background:var(--bg);}
+.deck-tab{flex:1;background:none;border:0;color:var(--muted);font-size:12.5px;font-weight:600;padding:8px 6px;border-radius:6px;cursor:pointer;}
+.deck-tab[aria-selected="true"]{color:var(--text);background:var(--panel);}
+.deck-bar{position:absolute;left:0;bottom:-1px;height:2px;width:50%;background:var(--accent);pointer-events:none;}
+.deck{flex:1;min-height:0;display:flex;overflow-x:auto;overflow-y:hidden;scroll-snap-type:x mandatory;overscroll-behavior-x:contain;scrollbar-width:none;}
+.deck::-webkit-scrollbar{display:none;}
+.slide{flex:0 0 100%;min-width:0;height:100%;overflow-y:auto;scroll-snap-align:start;scroll-snap-stop:always;-webkit-overflow-scrolling:touch;}
+body[data-slide="1"] .sticky-export{display:none !important;}
+input[type=range]{touch-action:pan-y;}
+
+/* ===== Cover maker ===== */
+.cv-app{max-width:1180px;margin:0 auto;padding:12px;display:grid;grid-template-columns:minmax(260px,360px) 1fr;gap:12px;align-items:start;}
+@media (max-width:860px){ .cv-app{grid-template-columns:1fr;padding:10px 10px 28px;gap:10px;} }
+.cv-stage{position:sticky;top:10px;}
+@media (max-width:860px){ .cv-stage{top:0;z-index:5;background:var(--bg);margin:0 -10px;padding:6px 10px 8px;border-bottom:1px solid var(--panel-border);} }
+.frame-wrap.cv-frame{max-width:300px;}
+@media (max-width:860px){ .frame-wrap.cv-frame{width:auto;max-width:none;height:min(36vh,330px);} }
+#coverCanvas{cursor:grab;touch-action:none;}
+.cv-frame .frame-empty{pointer-events:none;}
+.cv-tip{margin:6px 0 0;text-align:center;color:var(--muted);font-size:10.5px;line-height:1.35;}
+.cv-mini{background:var(--panel);border:1px solid var(--panel-border);color:var(--text);padding:5px 10px;border-radius:6px;font-size:11px;cursor:pointer;}
+.cv-mini:hover{border-color:var(--highlight);}
+#coverCanvas{width:100%;height:100%;display:block;}
+.ratio-switch.cv-seg{justify-content:flex-start;flex-wrap:wrap;margin-bottom:0;}
+.cv-in{width:100%;background:#14151C;border:1px solid var(--panel-border);border-radius:6px;color:var(--text);padding:8px 9px;font-family:var(--sans);font-size:12.5px;}
+.cv-in:focus{border-color:var(--highlight);}
+.cv-colors{display:flex;gap:10px;}
+.cv-colors > div{flex:1;}
+input[type=color]{width:100%;height:34px;background:none;border:1px solid var(--panel-border);border-radius:6px;padding:2px;cursor:pointer;}
+</style>
+</head>
+<body data-slide="0">
+
+<nav class="deck-nav" role="tablist" aria-label="Slides">
+  <button class="deck-tab" type="button" role="tab" aria-selected="true">🎬 Caption Video</button>
+  <button class="deck-tab" type="button" role="tab" aria-selected="false">🖼 Cover Image</button>
+  <span class="deck-bar" id="deckBar"></span>
+</nav>
+
+<main class="deck" id="deck">
+<section class="slide" id="slideCaption" aria-label="Caption video maker">
+
+<header class="top">
+  <div class="mark">CAPTION DECK</div>
+  <h1>4:5 Reel Maker — word-highlight captions</h1>
+  <p>Video/image jodo, caption add karo (type ya audio se auto), export karo.</p>
+</header>
+
+<div class="app">
+
+  <div class="stage">
+    <div class="ratio-switch" id="ratioSwitch">
+      <label class="ratio-opt"><input type="radio" name="aspectRatio" value="4:5" checked><span>4:5 Feed</span></label>
+      <label class="ratio-opt"><input type="radio" name="aspectRatio" value="9:16"><span>9:16 Reels/Shorts</span></label>
+    </div>
+    <div class="frame-wrap">
+      <canvas id="stageCanvas" width="1080" height="1350"></canvas>
+      <div class="frame-empty" id="frameEmpty">
+        <div class="icon">▭</div>
+        <div>Video/Image upload karne ke baad<br>preview yahan dikhega (4:5)</div>
+      </div>
+      <div class="focus-hint" id="focusHint">🎯 Preview par tap karke focus point set karein</div>
+    </div>
+    <div class="transport">
+      <button id="btnPlay" disabled>▶ Preview</button>
+      <span class="timecode" id="timecode">0:00 / 0:00</span>
+    </div>
+  </div>
+
+  <div class="panel">
+
+    <div class="card">
+      <div class="card-head"><span class="step">01</span><h2>Video/Image upload</h2></div>
+      <details>
+        <summary>Kaise kaam karta hai</summary>
+        <p>Video aur image dono ek saath select kar sakte ho, jis order mein select karo usi order mein judenge. Agar audio track attach nahi hai to har image ~5-6s dikhegi (total max 59s). Agar audio attach ho jaaye to yeh limit hat jaati hai — audio ki poori (core) length images mein barabar baant di jaati hai, aur video ko us duration ke hisaab se fast/slow (speed adjust) kar diya jaata hai, taaki audio kabhi bhi cut ya compromise na ho.</p>
+      </details>
+      <label class="file-drop" for="mediaInput">
+        <span id="dropLabel">Video/Image choose karein (multiple)</span>
+        <input type="file" id="mediaInput" accept="video/*,image/*" multiple>
+      </label>
+      <ul class="clip-list" id="clipList"></ul>
+      <div class="total-line" id="totalLine" style="display:none;"></div>
+      <div class="warn" id="lengthWarn" style="display:none;"></div>
+
+      <label class="file-drop" for="foregroundInput" style="margin-top:8px;">
+        <span id="fgDropLabel">Foreground/subject layer (optional, transparent PNG — parallax depth ke liye, images wale order mein)</span>
+        <input type="file" id="foregroundInput" accept="image/png" multiple>
+      </label>
+      <label class="opt-row"><input type="checkbox" id="cinematicGradeToggle" checked><span><strong>Cinematic vignette + color grade</strong> — depth aur mood ke liye</span></label>
+    </div>
+
+    <div class="card">
+      <div class="card-head"><span class="step">02</span><h2>Caption — type karein ya audio se auto</h2></div>
+      <details>
+        <summary>Kaise kaam karta hai</summary>
+        <p>Text khud likho, ya <strong>Hindi audio (voiceover)</strong> attach karo — Whisper us Hindi speech ko sunke Devanagari mein transcribe karta hai aur phir yahan wahi caption automatically <strong>Hinglish (Roman script)</strong> mein convert hoke aa jaata hai. Har word ka apna approx start/end time voiceover se hi milta hai, isliye highlight usi word par jaata hai jo us waqt bola ja raha hai — text edit karoge to timing dobara us Hindi audio se hi adjust ho jaati hai. Audio attach karne par woh export ki soundtrack ban jaati hai, aur attached video/images us audio ki poori length ke hisaab se adjust ho jaate hain — audio aur video/caption ekdum saath shuru aur saath khatam hote hain.</p>
+      </details>
+      <label class="file-drop" for="audioInput">
+        <span id="audioDropLabel">Hindi audio track (optional, auto-transcribe → Hinglish caption)</span>
+        <input type="file" id="audioInput" accept="audio/*">
+      </label>
+      <label class="opt-row" style="opacity:.5;"><input type="checkbox" id="exactSyncToggle" disabled><span><strong>Exact word sync</strong> — abhi disabled: yeh word-to-word forced-align model sirf English phonemes samajhta hai, Hindi audio par kaam nahi karta. Timing Whisper ke apne word-timestamps se aati hai (approx sync).</span></label>
+      <label class="opt-row"><input type="checkbox" id="useScriptToggle"><span>Meri likhi script use karo — caption box ka text hi transcript hai, Whisper skip (audio attach karne se pehle text paste karein)</span></label>
+      <label class="opt-row"><input type="checkbox" id="beatSyncToggle" checked><span><strong>Beat-sync cuts</strong> — image-to-image cut timing audio ke energy-hits (beats) ke paas snap hoti hai</span></label>
+      <div class="status-line" id="transcribeStatus" style="display:none;"></div>
+      <div class="field-row" id="syncRow" style="display:none;align-items:center;">
+        <span class="field-label" style="margin:0;">Highlight sync <span id="syncVal" style="color:var(--text);font-family:var(--mono);">0ms</span></span>
+      </div>
+      <input type="range" id="syncOffset" min="-600" max="600" step="10" value="0" style="display:none;">
+      <div class="hint" id="syncHint" style="display:none;margin:2px 0 0;">Exact sync mein 0ms hi sahi hota hai. Phir bhi agar aapke device par highlight aage/peeche lage to slider se milaiye — right = thoda der se (delay), left = jaldi (early).</div>
+      <textarea id="paragraphInput" placeholder="Caption paragraph yahan likho..." style="margin-top:10px;"></textarea>
+    </div>
+
+    <div class="card" id="exportCard">
+      <div class="card-head"><span class="step">03</span><h2>Export</h2></div>
+      <button class="btn" id="btnExport" disabled>Video Export Karein</button>
+      <div class="progress-track"><div class="progress-fill" id="progressFill"></div></div>
+      <div class="status-line" id="statusLine">Media aur text dono chahiye export ke liye.</div>
+      <div class="download-box" id="downloadBox">
+        <button class="btn" id="downloadBtn" type="button" style="width:auto;padding:9px 18px;">⬇ Download Video</button>
+        <span class="size" id="downloadSize"></span>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<div class="sticky-export" id="stickyExport">
+  <button class="btn" id="stickyExportBtn" type="button">↓ Export tak jaayen</button>
+</div>
+
+<footer class="foot">
+  Sab browser mein hi process hota hai, koi upload nahi. Export webm/mp4 mein hota hai, minimum 1080p (4:5 = 1080×1350, 9:16 = 1080×1920) aur 12 Mbps bitrate par. <strong>Auto-transcribe</strong> ek baar multilingual Whisper model (~140-190MB, Hindi audio ke liye) internet se load karta hai, phir Devanagari transcript ko yahin browser mein Hinglish (Roman) mein convert kar deta hai — Claude ke artifact preview mein sandbox ki wajah se kaam nahi karega, isliye yeh file khud host/open karke test karein.
+</footer>
+</section>
+
+<section class="slide" id="slideCover" aria-label="Cover image maker">
+<header class="top">
+  <div class="mark">COVER MAKER</div>
+  <h1>Cover Image Maker — top title, zyada CTR</h1>
+  <p>Photo lagao, upar bold title likho, PNG export karo. Left swipe karke Caption Video par wapas jaao.</p>
+</header>
+<div class="cv-app">
+  <div class="cv-stage">
+    <div class="ratio-switch">
+      <label class="ratio-opt"><input type="radio" name="cvRatio" value="4:5" checked><span>4:5 Feed</span></label>
+      <label class="ratio-opt"><input type="radio" name="cvRatio" value="9:16"><span>9:16 Reels/Shorts</span></label>
+    </div>
+    <div class="frame-wrap cv-frame" id="cvFrame"><canvas id="coverCanvas" width="1080" height="1350"></canvas>
+      <div class="frame-empty" id="cvEmpty"><div class="icon">▭</div><div>Photo ya title add karo<br>preview yahan dikhega</div></div>
+    </div>
+    <div class="transport"><span class="timecode" id="cvInfo" style="min-width:0;">1080 × 1350</span><button class="cv-mini" id="cvReset" type="button">Colour reset</button></div>
+    <p class="cv-tip">Preview par thumb se drag karo = photo reposition. Word par tap karo = colour badlo.</p>
+  </div>
+
+  <div class="panel">
+    <div class="card">
+      <div class="card-head"><span class="step">01</span><h2>Cover photo</h2></div>
+      <label class="file-drop" for="cvFile"><span id="cvFileLabel">Photo choose karein (bina photo ke bhi title preview chalta hai)</span><input type="file" id="cvFile" accept="image/*"></label>
+      <div class="field-row"><span class="field-label">Zoom in <span id="cvZoomVal" style="color:var(--text);font-family:var(--mono);">100%</span></span><button class="cv-mini" id="cvCropReset" type="button">Crop reset</button></div>
+      <input type="range" id="cvZoom" min="100" max="300" value="100">
+      <div class="field-row"><span class="field-label">Crop — left / right</span></div>
+      <input type="range" id="cvPosX" step="0.1" min="0" max="100" value="50">
+      <div class="field-row"><span class="field-label">Crop — upar / neeche</span></div>
+      <input type="range" id="cvPosY" step="0.1" min="0" max="100" value="50">
+      <div class="field-row"><span class="field-label">Title ke peeche dark shade</span></div>
+      <input type="range" id="cvScrim" min="0" max="90" value="65">
+      <label class="opt-row"><input type="checkbox" id="cvEnhance" checked><span><strong>Pop enhance</strong> — thoda contrast + colour, thumbnail par alag dikhne ke liye</span></label>
+    </div>
+
+    <div class="card">
+      <div class="card-head"><span class="step">02</span><h2>Title (top area)</h2></div>
+      <p class="hint">Title likho, phir preview mein word par tap karke colour badlo. Naya colour chahiye to niche Highlight picker se chuno, phir dusra word tap karo.</p>
+      <textarea id="cvTitle" rows="3" placeholder="Title yahan likho..."></textarea>
+
+      <span class="field-label">Title style</span>
+      <div class="ratio-switch cv-seg">
+        <label class="ratio-opt"><input type="radio" name="cvStyle" value="impact" checked><span>Impact</span></label>
+        <label class="ratio-opt"><input type="radio" name="cvStyle" value="box"><span>Dark box</span></label>
+        <label class="ratio-opt"><input type="radio" name="cvStyle" value="marker"><span>Marker</span></label>
+      </div>
+      <span class="field-label">Alignment</span>
+      <div class="ratio-switch cv-seg">
+        <label class="ratio-opt"><input type="radio" name="cvAlign" value="left" checked><span>Left</span></label>
+        <label class="ratio-opt"><input type="radio" name="cvAlign" value="center"><span>Center</span></label>
+      </div>
+
+      <div class="field-row"><span class="field-label">Title size</span></div>
+      <input type="range" id="cvSize" min="60" max="170" value="112">
+      <div class="field-row"><span class="field-label">Upar se gap</span></div>
+      <input type="range" id="cvTop" min="2" max="24" value="6">
+
+      <div class="cv-colors">
+        <div><span class="field-label">Text</span><input type="color" id="cvTextColor" value="#FFFFFF"></div>
+        <div><span class="field-label">Highlight</span><input type="color" id="cvHiColor" value="#F2B705"></div>
+      </div>
+      <label class="opt-row"><input type="checkbox" id="cvCaps"><span>English words CAPITAL mein</span></label>
+
+      <span class="field-label">Tag line (chhota pill, optional)</span>
+      <input class="cv-in" id="cvSub" type="text" placeholder="Jaise: Full video dekho">
+    </div>
+
+    <div class="card">
+      <div class="card-head"><span class="step">03</span><h2>Export</h2></div>
+      <button class="btn" id="cvExport" type="button">⬇ Cover PNG download karein</button>
+      <div class="status-line" id="cvStatus">1080 px wide PNG, high quality.</div>
+    </div>
+  </div>
+</div>
+</section>
+</main>
+
+<script>
+(function(){
+  let CANVAS_W = 720, CANVAS_H = 900;   // logical layout units (all layout/caption maths stay in these)
+  // Output quality: pixels are rendered and recorded at 1080 wide (4:5 -> 1080x1350, 9:16 -> 1080x1920),
+  // i.e. minimum 1080p. Drawing code keeps using the 720-wide logical units; ctx is scaled by RENDER_SCALE.
+  const EXPORT_WIDTH = 1080;
+  const RENDER_SCALE = EXPORT_WIDTH / 720;
+  const VIDEO_BITRATE = 12000000;       // 12 Mbps - MediaRecorder's default (~2.5 Mbps) looks blocky at 1080p
+  const AUDIO_BITRATE = 192000;
+  const WATERMARK_TEXT = 'Relationship Cues';
+  // Devanagari-safe font stack: Hindi captions render crisp/bold on Noto Sans Devanagari
+  // (the -apple-system/Segoe UI fallback used earlier renders Hindi thin and low-contrast).
+  const CANVAS_FONT_STACK = '"Noto Sans Devanagari","Poppins",-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif';
+  let fontsReady = false;
+  if(document.fonts && document.fonts.ready){
+    Promise.all([
+      document.fonts.load('900 80px "Noto Sans Devanagari"'),
+      document.fonts.load('700 80px "Noto Sans Devanagari"'),
+      document.fonts.load('800 32px "Poppins"')
+    ]).catch(function(){}).finally(function(){
+      fontsReady = true;
+      layoutCache = null;
+      drawStaticFrame();
+    });
+  } else {
+    fontsReady = true;
+  }
+  const MAX_TOTAL_SECONDS = 59;
+  const LEFT_PAD = 40;
+  const RIGHT_PAD = 40;
+  const HIGHLIGHT_COLOR = '#3EE8AE';
+  const MAX_WORDS_PER_CHUNK = 9;   // 4:5 feed
+  const MAX_WORDS_VERTICAL = 6;    // 9:16 Shorts/Reels: chhoti screens jaldi padhi jaati hain
+  const IMAGE_MIN_SEC = 5, IMAGE_MAX_SEC = 6;
+  const IMAGE_REF_WEIGHT = (IMAGE_MIN_SEC + IMAGE_MAX_SEC) / 2; // reference "weight" used to split narration-driven duration evenly between images
+  const TRANSITION_SEC = 0.4;
+  const AUDIO_LEAD_PAD = 0;   // silent second added before narration starts (0 = disabled)
+  const AUDIO_TAIL_PAD = 0;   // silent second added after narration ends (0 = disabled)
+  const VIDEO_RATE_MIN = 0.25, VIDEO_RATE_MAX = 4; // safety clamp when speeding up/slowing a video to match narration
+
+  // Ken Burns movement combinations (>= 9 distinct patterns). Pan amplitude here is chosen
+  // to match the crop margin available at the scale used, so the image genuinely travels
+  // edge-to-edge across the clip instead of getting clamped back to center (which made the
+  // old values look almost static). Pure pans use a constant 1.30x scale (margin ±0.115,
+  // we use ±0.095 for a safety buffer); zoom+drift combos keep deviation inside the margin
+  // of their smallest scale throughout the eased timeline.
+  const KEN_BURNS_COMBOS = [
+    { startScale:1.00, endScale:1.35, startCx:0.50, startCy:0.50, endCx:0.50, endCy:0.50 }, // zoom in, center
+    { startScale:1.35, endScale:1.00, startCx:0.50, startCy:0.50, endCx:0.50, endCy:0.50 }, // zoom out, center
+    { startScale:1.30, endScale:1.30, startCx:0.405, startCy:0.50, endCx:0.595, endCy:0.50 }, // pan left->right
+    { startScale:1.30, endScale:1.30, startCx:0.595, startCy:0.50, endCx:0.405, endCy:0.50 }, // pan right->left
+    { startScale:1.30, endScale:1.30, startCx:0.50, startCy:0.405, endCx:0.50, endCy:0.595 }, // pan top->bottom
+    { startScale:1.30, endScale:1.30, startCx:0.50, startCy:0.595, endCx:0.50, endCy:0.405 }, // pan bottom->top
+    { startScale:1.30, endScale:1.30, startCx:0.405, startCy:0.405, endCx:0.595, endCy:0.595 }, // diagonal pan TL->BR
+    { startScale:1.30, endScale:1.30, startCx:0.595, startCy:0.595, endCx:0.405, endCy:0.405 }, // diagonal pan BR->TL
+    { startScale:1.30, endScale:1.30, startCx:0.405, startCy:0.595, endCx:0.595, endCy:0.405 }, // diagonal pan BL->TR
+    { startScale:1.30, endScale:1.30, startCx:0.595, startCy:0.405, endCx:0.405, endCy:0.595 }, // diagonal pan TR->BL
+    { startScale:1.35, endScale:1.15, startCx:0.50, startCy:0.50, endCx:0.45, endCy:0.45 }, // zoom out + drift toward TL
+    { startScale:1.35, endScale:1.15, startCx:0.50, startCy:0.50, endCx:0.55, endCy:0.55 }, // zoom out + drift toward BR
+    { startScale:1.35, endScale:1.15, startCx:0.50, startCy:0.50, endCx:0.55, endCy:0.45 }, // zoom out + drift toward TR
+    { startScale:1.35, endScale:1.15, startCx:0.50, startCy:0.50, endCx:0.45, endCy:0.55 }  // zoom out + drift toward BL
+  ];
+  let lastComboIdx = -1;
+  function pickCombo(){
+    let idx;
+    do{ idx = Math.floor(Math.random()*KEN_BURNS_COMBOS.length); }
+    while(idx === lastComboIdx && KEN_BURNS_COMBOS.length > 1);
+    lastComboIdx = idx;
+    return idx;
+  }
+  function lerp(a,b,t){ return a + (b-a)*t; }
+  // ease-in-out so the pan/zoom accelerates then settles, like a handled camera move
+  function easeInOutCubic(t){ return t < 0.5 ? 4*t*t*t : 1 - Math.pow(-2*t+2, 3)/2; }
+
+  const canvas = document.getElementById('stageCanvas');
+  const ctx = canvas.getContext('2d');
+  const frameEmpty = document.getElementById('frameEmpty');
+  const focusHint = document.getElementById('focusHint');
+  let focusModeClip = null;
+  const mediaInput = document.getElementById('mediaInput');
+  const dropLabel = document.getElementById('dropLabel');
+  const foregroundInput = document.getElementById('foregroundInput');
+  const fgDropLabel = document.getElementById('fgDropLabel');
+  const cinematicGradeToggle = document.getElementById('cinematicGradeToggle');
+  let fgImagesCache = []; // foreground PNGs in upload order, matched to image-type clips by order
+  const clipListEl = document.getElementById('clipList');
+  const totalLine = document.getElementById('totalLine');
+  const lengthWarn = document.getElementById('lengthWarn');
+  const paragraphInput = document.getElementById('paragraphInput');
+  const audioInput = document.getElementById('audioInput');
+  const audioDropLabel = document.getElementById('audioDropLabel');
+  const transcribeStatus = document.getElementById('transcribeStatus');
+  const syncRow = document.getElementById('syncRow');
+  const syncOffsetEl = document.getElementById('syncOffset');
+  const syncValEl = document.getElementById('syncVal');
+  const syncHintEl = document.getElementById('syncHint');
+  const exactSyncToggle = document.getElementById('exactSyncToggle');
+  const useScriptToggle = document.getElementById('useScriptToggle');
+  const beatSyncToggle = document.getElementById('beatSyncToggle');
+  let audioOnsets = []; // detected onset/"beat" times (seconds) in the narration track
+  let syncOffsetMs = Number(syncOffsetEl.value) || 0; // +ve = highlight thoda der se (delay), -ve = jaldi (early)
+  const btnPlay = document.getElementById('btnPlay');
+  const btnExport = document.getElementById('btnExport');
+  const timecodeEl = document.getElementById('timecode');
+  const progressFill = document.getElementById('progressFill');
+  const statusLine = document.getElementById('statusLine');
+  const downloadBox = document.getElementById('downloadBox');
+  const downloadBtn = document.getElementById('downloadBtn');
+  const downloadSize = document.getElementById('downloadSize');
+  let lastBlob = null, lastFilename = 'caption-video.webm';
+
+  async function triggerDownload(){
+    if(!lastBlob) return;
+    downloadBtn.disabled = true;
+    const originalLabel = downloadBtn.textContent;
+    downloadBtn.textContent = 'Saving...';
+    try{
+      const downloads = (window.claude && typeof window.claude.use === 'function')
+        ? await window.claude.use('downloads') : null;
+      if(downloads){
+        try{
+          const res = await downloads.save({ filename: lastFilename, data: lastBlob });
+          downloadBtn.textContent = res && res.status === 'delivered' ? 'Sent ✓' : 'Saved ✓';
+          setTimeout(function(){ downloadBtn.textContent = originalLabel; downloadBtn.disabled = false; }, 1600);
+          return;
+        }catch(err){
+          const code = err && err.code;
+          if(code === 'declined'){
+            downloadBtn.textContent = originalLabel; downloadBtn.disabled = false; return;
+          }
+          // fall through to manual method for other errors (unavailable, rate_limited, etc.)
+        }
+      }
+      // Fallback: plain browser download (works when this page is opened directly, not inside the artifact viewer)
+      const url = URL.createObjectURL(lastBlob);
+      const a = document.createElement('a');
+      a.href = url; a.download = lastFilename;
+      document.body.appendChild(a); a.click(); document.body.removeChild(a);
+      setTimeout(function(){ URL.revokeObjectURL(url); }, 4000);
+      downloadBtn.textContent = originalLabel;
+      downloadBtn.disabled = false;
+    }catch(e){
+      downloadBtn.textContent = originalLabel;
+      downloadBtn.disabled = false;
+    }
+  }
+  downloadBtn.addEventListener('click', triggerDownload);
+
+  const video = document.createElement('video');
+  video.playsInline = true;
+  video.preload = 'auto';
+
+  const narrationAudio = document.createElement('audio');
+  narrationAudio.preload = 'auto';
+  let narrationDuration = 0;   // core (unpadded) narration length in seconds — the actual speech duration
+  let wordTimestamps = null;   // [{text, start, end}] from auto-transcription, null = manual/uniform timing; timestamps are offset by AUDIO_LEAD_PAD to line up with the padded playback track
+  let displayClips = [];       // the real media clips shown in the clip-list UI (excludes the synthetic lead/tail freeze pads)
+  let transcribing = false;
+  let effectiveMaxSeconds = MAX_TOTAL_SECONDS;
+  let rawClipsCache = null;
+  let transformersPromise = null;  // @xenova/transformers module, shared by Whisper and the forced-alignment model
+  let ctcModelPromise = null, ctcVocabCache = null;
+  let ctcEmissions = null;         // cached wav2vec2 log-probs of the narration: {data,F,V,vocab,blank,delim} -> exact word timing for ANY caption text
+  let alignVersion = 0, wordTimesCache = null;
+
+  let clips = [];          // {type:'video'|'image'|'freeze', file, url, name, rawDuration, usedDuration, trimmed, img, comboIdx, playbackRate}
+                            // 'freeze' clips are synthetic — they hold a still frame (from the first/last real clip) while the
+                            // AUDIO_LEAD_PAD/AUDIO_TAIL_PAD silence plays; they never appear in displayClips/the UI clip list.
+  let effectiveDuration = 0;
+  let currentClipIdx = 0;
+  let globalElapsedBase = 0;
+  let hasClips = false;
+  let layoutCache = null;
+  let voice = null;            // energy/speech analysis of the narration: {frames, db, n, offset, firstTime, lastTime} — null if speech/silence contrast is unclear (used to snap word edges)
+  let rafId = null;
+
+  let audioCtx = null, audioDestination = null, audioGraphReady = false;
+  let isRecording = false;
+  let mediaRecorder = null;
+  let recordedChunks = [];
+  let chosenMime = '';
+  let exportRes = '';
+  let previewing = false;
+
+  let imageClipStartAt = 0; // performance.now() when current image clip became active
+  let transitionSnapshot = null; // offscreen canvas
+  let transitioning = false;
+  let transitionStart = 0;
+
+  const snapCanvas = document.createElement('canvas');
+  const snapCtx = snapCanvas.getContext('2d');
+
+  function setupStageCtx(){
+    ctx.setTransform(RENDER_SCALE, 0, 0, RENDER_SCALE, 0, 0);
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = 'high';
+  }
+  function applyCanvasResolution(){
+    const pw = Math.round(CANVAS_W * RENDER_SCALE), ph = Math.round(CANVAS_H * RENDER_SCALE);
+    canvas.width = pw; canvas.height = ph;          // resizing resets ctx state, so re-apply the transform
+    snapCanvas.width = pw; snapCanvas.height = ph;
+    setupStageCtx();
+  }
+  applyCanvasResolution();
+
+  function fmtTime(s){
+    s = Math.max(0, s || 0);
+    const m = Math.floor(s/60);
+    const sec = Math.floor(s%60);
+    return m + ':' + String(sec).padStart(2,'0');
+  }
+
+  function getLocalElapsed(){
+    const c = clips[currentClipIdx];
+    if(!c) return 0;
+    if(c.type === 'video'){
+      if(video.ended && c.videoEndedAt){
+        return Math.min(c.usedDuration, video.duration + (performance.now() - c.videoEndedAt)/1000);
+      }
+      return Math.min(video.currentTime, c.usedDuration);
+    }
+    return Math.min((performance.now() - imageClipStartAt)/1000, c.usedDuration);
+  }
+
+  function totalElapsed(){
+    if(!clips.length) return 0;
+    return globalElapsedBase + getLocalElapsed();
+  }
+
+  // ---------- Multi-file upload (video + image) ----------
+  mediaInput.addEventListener('change', function(e){
+    const files = Array.from(e.target.files || []);
+    if(!files.length) return;
+
+    dropLabel.textContent = files.length + ' file(s) selected — loading...';
+    btnPlay.disabled = true;
+    btnExport.disabled = true;
+    clipListEl.innerHTML = '';
+    totalLine.style.display = 'none';
+    lengthWarn.style.display = 'none';
+
+    const rawClips = files.map(f => ({
+      file: f, url: URL.createObjectURL(f), name: f.name,
+      type: f.type.indexOf('image/') === 0 ? 'image' : 'video',
+      rawDuration: 0, img: null
+    }));
+
+    let loaded = 0;
+    function onOneLoaded(){
+      loaded++;
+      if(loaded === rawClips.length){
+        rawClipsCache = rawClips;
+        attachForegroundLayers();
+        finalizeClips(rawClips);
+      }
+    }
+
+    rawClips.forEach(c => {
+      if(c.type === 'image'){
+        const img = new Image();
+        img.onload = function(){
+          c.img = img;
+          c.rawDuration = IMAGE_MIN_SEC + Math.random()*(IMAGE_MAX_SEC - IMAGE_MIN_SEC);
+          onOneLoaded();
+        };
+        img.onerror = function(){ c.rawDuration = 0; onOneLoaded(); };
+        img.src = c.url;
+      } else {
+        const probe = document.createElement('video');
+        probe.preload = 'metadata';
+        probe.src = c.url;
+        probe.onloadedmetadata = function(){ c.rawDuration = probe.duration; onOneLoaded(); };
+        probe.onerror = function(){ c.rawDuration = 0; onOneLoaded(); };
+      }
+    });
+  });
+
+  function finalizeClips(rawClips){
+    lastComboIdx = -1;
+    const narrationActive = !!narrationAudio.src && narrationDuration > 0;
+
+    const finalClips = narrationActive ? distributeClipsAcrossNarration(rawClips) : trimClipsToFit(rawClips);
+    displayClips = finalClips;
+
+    // Wrap with silent lead/tail freeze pads so a padded second of silence at each end of the
+    // narration audio still shows a held frame instead of jump-cutting straight into content.
+    // Skipped entirely when a pad's duration is 0, so audio and video start/end together exactly.
+    if(narrationActive && finalClips.length && (AUDIO_LEAD_PAD > 0 || AUDIO_TAIL_PAD > 0)){
+      const wrapped = [...finalClips];
+      if(AUDIO_TAIL_PAD > 0) wrapped.push(makeFreezePad(finalClips[finalClips.length - 1], 'end', AUDIO_TAIL_PAD));
+      if(AUDIO_LEAD_PAD > 0) wrapped.unshift(makeFreezePad(finalClips[0], 'start', AUDIO_LEAD_PAD));
+      clips = wrapped;
+      effectiveDuration = AUDIO_LEAD_PAD + finalClips.reduce((s,c) => s + c.usedDuration, 0) + AUDIO_TAIL_PAD;
+    } else {
+      clips = finalClips;
+      effectiveDuration = finalClips.reduce((s,c) => s + c.usedDuration, 0);
+    }
+
+    currentClipIdx = 0;
+    globalElapsedBase = 0;
+    hasClips = clips.length > 0;
+
+    dropLabel.textContent = displayClips.length + ' clip(s) attached';
+    renderClipList(rawClips.length);
+
+    if(hasClips){
+      frameEmpty.style.display = 'none';
+      btnPlay.disabled = false;
+      activateClip(0, function(){ drawStaticFrame(); });
+    }
+    updateExportReady();
+  }
+
+  // ---------- Foreground/subject layer (optional, transparent PNG parallax) ----------
+  // Matches uploaded foreground PNGs to image-type raw clips, in order (video clips skipped —
+  // parallax overlay only applies to still images). Re-run whenever either input changes.
+  function attachForegroundLayers(){
+    if(!rawClipsCache) return;
+    let idx = 0;
+    rawClipsCache.forEach(function(c){
+      if(c.type === 'image'){
+        c.fgImg = fgImagesCache[idx] || null;
+        idx++;
+      }
+    });
+  }
+
+  foregroundInput.addEventListener('change', function(e){
+    const files = Array.from(e.target.files || []);
+    if(!files.length) return;
+    fgDropLabel.textContent = files.length + ' layer(s) loading...';
+    let loaded = 0;
+    const imgs = new Array(files.length);
+    files.forEach(function(f, i){
+      const img = new Image();
+      img.onload = function(){ imgs[i] = img; loaded++; if(loaded === files.length) onAllLoaded(); };
+      img.onerror = function(){ loaded++; if(loaded === files.length) onAllLoaded(); };
+      img.src = URL.createObjectURL(f);
+    });
+    function onAllLoaded(){
+      fgImagesCache = imgs.filter(Boolean);
+      fgDropLabel.textContent = fgImagesCache.length + ' foreground layer(s) attached';
+      attachForegroundLayers();
+      if(rawClipsCache) finalizeClips(rawClipsCache);
+      else drawStaticFrame();
+    }
+  });
+
+  cinematicGradeToggle.addEventListener('change', function(){ if(hasClips && !previewing && !isRecording) drawStaticFrame(); });
+
+  // No narration track attached: old behaviour — play clips back to back, trimming/holding
+  // the last one to fit inside MAX_TOTAL_SECONDS.
+  function trimClipsToFit(rawClips){
+    let cum = 0;
+    const finalClips = [];
+    rawClips.forEach(c => {
+      const remaining = effectiveMaxSeconds - cum;
+      if(remaining <= 0.02) return;
+      const used = Math.min(c.rawDuration, remaining);
+      finalClips.push({
+        type: c.type, file: c.file, url: c.url, name: c.name,
+        rawDuration: c.rawDuration, usedDuration: used, playbackRate: 1,
+        trimmed: used < c.rawDuration - 0.02,
+        img: c.img, fgImg: c.fgImg || null, comboIdx: c.type === 'image' ? pickCombo() : -1,
+        focusX: c.focusX != null ? c.focusX : 0.5, focusY: c.focusY != null ? c.focusY : 0.5
+      });
+      cum += used;
+    });
+    if(finalClips.length && cum < effectiveMaxSeconds - 0.05){
+      finalClips[finalClips.length - 1].usedDuration += (effectiveMaxSeconds - cum);
+    }
+    return finalClips;
+  }
+
+  // Narration track attached: no compromise on audio length — every attached clip is kept,
+  // and the narration's core (unpadded) duration is split across all of them so the full
+  // audio always plays start to finish. Images split that time evenly between them; a video
+  // is instead sped up or slowed down (playbackRate) to exactly fill its share, rather than
+  // being trimmed or held frozen.
+  function distributeClipsAcrossNarration(rawClips){
+    const coreDuration = Math.max(0.1, effectiveMaxSeconds - AUDIO_LEAD_PAD - AUDIO_TAIL_PAD);
+    const usable = rawClips.filter(c => c.rawDuration > 0 || c.type === 'image');
+    if(!usable.length) return [];
+
+    const weights = usable.map(c => c.type === 'video' ? Math.max(0.5, c.rawDuration) : IMAGE_REF_WEIGHT);
+    const totalWeight = weights.reduce((s,w) => s+w, 0);
+
+    const finalClips = usable.map((c, i) => {
+      const allocated = coreDuration * (weights[i] / totalWeight);
+      if(c.type === 'video'){
+        let rate = c.rawDuration / allocated;
+        rate = Math.max(VIDEO_RATE_MIN, Math.min(VIDEO_RATE_MAX, rate));
+        const used = c.rawDuration / rate; // recompute in case the rate got clamped
+        return {
+          type: 'video', file: c.file, url: c.url, name: c.name,
+          rawDuration: c.rawDuration, usedDuration: used, playbackRate: rate,
+          trimmed: false, img: null, comboIdx: -1
+        };
+      }
+      return {
+        type: 'image', file: c.file, url: c.url, name: c.name,
+        rawDuration: c.rawDuration, usedDuration: allocated, playbackRate: 1,
+        trimmed: false, img: c.img, fgImg: c.fgImg || null, comboIdx: pickCombo(),
+        focusX: c.focusX != null ? c.focusX : 0.5, focusY: c.focusY != null ? c.focusY : 0.5
+      };
+    });
+
+    // A clamped video rate can leave the total a touch short/long of coreDuration —
+    // absorb that on the last clip (if it's an image) so the full narration is still covered exactly.
+    const cum = finalClips.reduce((s,c) => s + c.usedDuration, 0);
+    const drift = coreDuration - cum;
+    if(finalClips.length && Math.abs(drift) > 0.02 && finalClips[finalClips.length-1].type === 'image'){
+      finalClips[finalClips.length - 1].usedDuration = Math.max(0.3, finalClips[finalClips.length - 1].usedDuration + drift);
+    }
+
+    // Beat-sync: nudge cut points that fall between two images onto the nearest detected
+    // audio onset (energy hit), so cuts land on the music/beat instead of an arbitrary even split.
+    // Video clips are left untouched here — snapping their boundary would also force a playbackRate
+    // recompute, which is out of scope for a "nice to have" timing nudge.
+    if(beatSyncToggle.checked && audioOnsets.length){
+      snapBoundariesToBeats(finalClips, audioOnsets, coreDuration);
+    }
+
+    return finalClips;
+  }
+
+  // Shifts interior cut points that sit between two image clips to the nearest onset time
+  // within a small tolerance window, without letting any clip get shorter than MIN_CLIP or
+  // crossing into its neighbour's territory.
+  function snapBoundariesToBeats(finalClips, onsets, coreDuration){
+    if(finalClips.length < 2) return;
+    const MIN_CLIP = 0.6, TOL = 0.35;
+    const boundaries = [0];
+    finalClips.forEach(function(c){ boundaries.push(boundaries[boundaries.length-1] + c.usedDuration); });
+    boundaries[boundaries.length - 1] = coreDuration;
+
+    for(let i = 1; i < boundaries.length - 1; i++){
+      const leftIsImage = finalClips[i-1].type === 'image';
+      const rightIsImage = finalClips[i] && finalClips[i].type === 'image';
+      if(!leftIsImage || !rightIsImage) continue;
+      const target = boundaries[i];
+      let best = null, bestDist = TOL;
+      for(let k = 0; k < onsets.length; k++){
+        const d = Math.abs(onsets[k] - target);
+        if(d < bestDist){ bestDist = d; best = onsets[k]; }
+      }
+      if(best == null) continue;
+      const lo = boundaries[i-1] + MIN_CLIP;
+      const hi = boundaries[i+1] - MIN_CLIP;
+      if(best > lo && best < hi) boundaries[i] = best;
+    }
+
+    for(let i = 0; i < finalClips.length; i++){
+      finalClips[i].usedDuration = Math.max(0.15, boundaries[i+1] - boundaries[i]);
+    }
+  }
+
+  function makeFreezePad(refClip, freezeAt, duration){
+    return {
+      type: 'freeze', refClip: refClip, freezeAt: freezeAt,
+      file: refClip.file, url: refClip.url, name: '(pad)',
+      rawDuration: duration, usedDuration: duration, playbackRate: 1,
+      trimmed: false, img: refClip.img, fgImg: refClip.fgImg || null, comboIdx: refClip.comboIdx,
+      focusX: refClip.focusX, focusY: refClip.focusY
+    };
+  }
+
+  function renderClipList(rawCount){
+    clipListEl.innerHTML = '';
+    displayClips.forEach(c => {
+      const li = document.createElement('li');
+      if(c.trimmed) li.className = 'trimmed';
+      const nameSpan = document.createElement('span');
+      nameSpan.className = 'cname';
+      nameSpan.textContent = (c.type === 'image' ? '🖼 ' : '🎬 ') + c.name;
+      const durSpan = document.createElement('span');
+      durSpan.className = 'cdur';
+      let label = c.trimmed ? (fmtTime(c.usedDuration) + ' (trimmed)') : fmtTime(c.usedDuration);
+      if(c.type === 'video' && c.playbackRate && Math.abs(c.playbackRate - 1) > 0.02){
+        label += ' (' + c.playbackRate.toFixed(2) + 'x ' + (c.playbackRate > 1 ? 'fast' : 'slow') + ')';
+      }
+      durSpan.textContent = label;
+      li.appendChild(nameSpan);
+      if(c.type === 'image'){
+        const focusBtn = document.createElement('button');
+        focusBtn.type = 'button';
+        focusBtn.className = 'focus-btn';
+        focusBtn.title = 'Focus point set karein (smart crop)';
+        focusBtn.textContent = '🎯';
+        focusBtn.addEventListener('click', function(ev){
+          ev.preventDefault();
+          enableFocusMode(c);
+        });
+        li.appendChild(focusBtn);
+      }
+      li.appendChild(durSpan);
+      clipListEl.appendChild(li);
+    });
+    totalLine.style.display = 'block';
+    totalLine.innerHTML = 'Total used: <strong>' + fmtTime(effectiveDuration) + '</strong> / ' + Math.round(effectiveMaxSeconds) + 's max' + (wordTimestamps ? ' (audio track length se set)' : '');
+    if(rawCount > displayClips.length || displayClips.some(c => c.trimmed)){
+      lengthWarn.style.display = 'block';
+      lengthWarn.textContent = 'Combined length ' + Math.round(effectiveMaxSeconds) + ' second se zyaada thi — extra hissa/clips trim/skip kar diye gaye.';
+    } else {
+      lengthWarn.style.display = 'none';
+    }
+  }
+
+  // ---------- Smart focal-point crop ----------
+  // Recenters that image's Ken Burns pan path on the tapped point instead of the image center,
+  // so subjects that aren't centered don't get cropped out of the 4:5/9:16 frame.
+  function setClipFocus(clip, fx, fy){
+    clip.focusX = fx; clip.focusY = fy;
+    if(rawClipsCache){
+      const rc = rawClipsCache.find(function(r){ return r.img === clip.img; });
+      if(rc){ rc.focusX = fx; rc.focusY = fy; }
+    }
+  }
+
+  function enableFocusMode(clip){
+    focusModeClip = clip;
+    const idx = clips.indexOf(clip);
+    if(idx !== -1){
+      if(previewing){ previewing = false; cancelAnimationFrame(rafId); video.pause(); narrationAudio.pause(); btnPlay.textContent = '▶ Preview'; }
+      currentClipIdx = idx;
+      globalElapsedBase = clips.slice(0, idx).reduce(function(s,c){ return s + c.usedDuration; }, 0);
+      activateClip(idx, function(){ drawStaticFrame(); });
+    }
+    canvas.style.cursor = 'crosshair';
+    focusHint.classList.add('show');
+  }
+
+  canvas.addEventListener('click', function(e){
+    if(!focusModeClip) return;
+    const rect = canvas.getBoundingClientRect();
+    const fx = Math.max(0.06, Math.min(0.94, (e.clientX - rect.left) / rect.width));
+    const fy = Math.max(0.06, Math.min(0.94, (e.clientY - rect.top) / rect.height));
+    setClipFocus(focusModeClip, fx, fy);
+    focusModeClip = null;
+    canvas.style.cursor = '';
+    focusHint.classList.remove('show');
+    layoutCache = null;
+    drawStaticFrame();
+  });
+
+  // ---------- Activation (video plays; image just starts a timer) ----------
+  function activateClip(idx, onReady){
+    const c = clips[idx];
+    if(c.type === 'video'){
+      video.pause();
+      c.videoEndedAt = null;
+      video.playbackRate = c.playbackRate || 1;
+      const endedHandler = function(){ c.videoEndedAt = performance.now(); };
+      video.addEventListener('ended', endedHandler, { once: true });
+      const handler = function(){
+        video.removeEventListener('loadeddata', handler);
+        video.currentTime = 0;
+        video.playbackRate = c.playbackRate || 1;
+        const p = video.play();
+        if(p && p.then) p.then(onReady).catch(onReady); else onReady();
+      };
+      video.addEventListener('loadeddata', handler);
+      video.src = c.url;
+      video.load();
+    } else if(c.type === 'freeze' && c.refClip.type === 'video'){
+      // hold a single still frame from the referenced video (first frame for the lead pad,
+      // last frame for the tail pad) while the padded silence plays
+      video.pause();
+      const handler = function(){
+        video.removeEventListener('loadeddata', handler);
+        video.playbackRate = 1;
+        video.currentTime = c.freezeAt === 'start' ? 0 : Math.max(0, c.refClip.rawDuration - 0.08);
+        video.pause();
+        imageClipStartAt = performance.now();
+        if(onReady) onReady();
+      };
+      video.addEventListener('loadeddata', handler);
+      video.src = c.refClip.url;
+      video.load();
+    } else {
+      video.pause();
+      imageClipStartAt = performance.now();
+      if(onReady) onReady();
+    }
+  }
+
+  const TRANSITION_TYPES = ['crossfade','punchZoom','slideLeft','slideRight','whipBlur'];
+  const TRANSITION_DURS = { crossfade:0.4, punchZoom:0.38, slideLeft:0.42, slideRight:0.42, whipBlur:0.22 };
+  let lastTransitionIdx = -1;
+  function pickTransition(){
+    let idx;
+    do{ idx = Math.floor(Math.random()*TRANSITION_TYPES.length); }
+    while(idx === lastTransitionIdx && TRANSITION_TYPES.length > 1);
+    lastTransitionIdx = idx;
+    return TRANSITION_TYPES[idx];
+  }
+  let currentTransitionType = 'crossfade';
+  let currentTransitionDur = TRANSITION_SEC;
+
+  function captureSnapshot(){
+    snapCtx.clearRect(0,0,snapCanvas.width,snapCanvas.height);
+    snapCtx.drawImage(canvas, 0, 0);
+    transitionSnapshot = snapCanvas;
+  }
+
+  function advance(onAdvanced, onFinished){
+    if(currentClipIdx < clips.length - 1){
+      captureSnapshot();
+      globalElapsedBase += clips[currentClipIdx].usedDuration;
+      currentClipIdx++;
+      activateClip(currentClipIdx, function(){
+        transitioning = true;
+        currentTransitionType = pickTransition();
+        currentTransitionDur = TRANSITION_DURS[currentTransitionType] || TRANSITION_SEC;
+        transitionStart = performance.now();
+        onAdvanced();
+      });
+    } else {
+      onFinished();
+    }
+  }
+
+  // ---------- Caption text ----------
+  // Editing the text re-aligns it to the voiceover right away (cached audio emissions + a fast Viterbi pass),
+  // so the highlight always follows the words that are actually on screen.
+  paragraphInput.addEventListener('input', function(){
+    invalidateWordTimes();
+    updateExportReady();
+    drawStaticFrame();
+    refreshSyncStatus(true);
+  });
+
+  syncOffsetEl.addEventListener('input', function(){
+    syncOffsetMs = Number(syncOffsetEl.value) || 0;
+    syncValEl.textContent = (syncOffsetMs > 0 ? '+' : '') + syncOffsetMs + 'ms';
+    drawStaticFrame();
+  });
+
+  function setSyncOffset(ms){
+    syncOffsetEl.value = ms;
+    syncOffsetMs = ms;
+    syncValEl.textContent = (ms > 0 ? '+' : '') + ms + 'ms';
+  }
+
+  // ---------- Exact word sync engine ----------
+  // Every caption word gets its OWN start/end time, taken from the audio itself:
+  //   1) CTC forced alignment (wav2vec2) of the caption text against the voiceover. The audio goes through the
+  //      model once (emissions are cached); aligning is then a cheap Viterbi pass, so editing the text re-syncs
+  //      instantly, word for word. Word edges are then snapped to the real silence / energy dip in the audio.
+  //   2) Fallback (model unavailable): Whisper word timestamps mapped onto the caption words by text alignment.
+  // The highlight is simply "the last word whose start <= playback time" - no length-proportional guessing,
+  // no onset snapping, no per-screen approximations.
+  const VOICE_HOP = 0.01;       // 10ms energy frames
+  const CTC_HOP = 0.02;         // wav2vec2 output frame = 20ms
+  const HIGHLIGHT_LEAD = 0.03;  // highlight lands ~30ms before the audible onset so it is never seen late
+  const MIN_SCREEN_WORDS = 4;
+
+  // ----- voice analysis: energy envelope + speech/silence mask (used to snap word edges) -----
+  function fillRuns(a, val, maxLen, to){
+    const n = a.length;
+    let i = 0;
+    while(i < n){
+      if(a[i] !== val){ i++; continue; }
+      let j = i;
+      while(j < n && a[j] === val) j++;
+      if(i > 0 && j < n && (j - i) < maxLen){ for(let k = i; k < j; k++) a[k] = to; }
+      i = j;
+    }
+  }
+
+  // ---------- Lightweight onset/"beat" detection (energy-flux peak-picking) ----------
+  // Not full BPM/beat-tracking — just finds percussive/energy hits in the track so image cuts
+  // can be nudged to land on them (see snapBoundariesToBeats). Good enough for music with clear
+  // hits; for very smooth/ambient audio it may simply find nothing, which is handled gracefully.
+  function detectOnsets(samples, sampleRate){
+    const hop = Math.round(sampleRate * 0.05); // 50ms windows
+    const n = Math.floor(samples.length / hop);
+    if(n < 4) return [];
+    const energies = new Float32Array(n);
+    for(let i = 0; i < n; i++){
+      let sum = 0;
+      const start = i * hop, end = Math.min(samples.length, start + hop);
+      for(let j = start; j < end; j++) sum += samples[j] * samples[j];
+      energies[i] = Math.sqrt(sum / Math.max(1, end - start));
+    }
+    const flux = new Float32Array(n);
+    for(let i = 1; i < n; i++){
+      const d = energies[i] - energies[i-1];
+      flux[i] = d > 0 ? d : 0;
+    }
+    let mean = 0;
+    for(let i = 0; i < n; i++) mean += flux[i];
+    mean /= n;
+    let variance = 0;
+    for(let i = 0; i < n; i++) variance += (flux[i] - mean) * (flux[i] - mean);
+    const std = Math.sqrt(variance / n);
+    const threshold = mean + std * 1.2;
+    const minGapFrames = Math.round(0.22 / 0.05);
+
+    const onsets = [];
+    let lastFrame = -minGapFrames;
+    for(let i = 1; i < n - 1; i++){
+      if(flux[i] > threshold && flux[i] >= flux[i-1] && flux[i] >= flux[i+1] && (i - lastFrame) >= minGapFrames){
+        onsets.push(i * hop / sampleRate);
+        lastFrame = i;
+      }
+    }
+    return onsets;
+  }
+
+  function analyzeVoice(samples, sr, offset){
+    const win = Math.round(sr * 0.02), hop = Math.round(sr * VOICE_HOP);
+    const n = Math.floor((samples.length - win) / hop) + 1;
+    if(n < 50) return null;
+    const db = new Float32Array(n);
+    for(let f = 0; f < n; f++){
+      let e = 0;
+      const o = f * hop;
+      for(let i = 0; i < win; i++){ const v = samples[o + i]; e += v * v; }
+      db[f] = 10 * Math.log10(e / win + 1e-10);
+    }
+    const sorted = Float32Array.from(db).sort();
+    const floor = sorted[Math.floor(n * 0.10)], peak = sorted[Math.floor(n * 0.95)];
+    if(peak - floor < 12) return null;               // no clear speech-vs-silence contrast: don't trust VAD
+    const thr = floor + Math.max(6, (peak - floor) * 0.28);
+    const frames = new Uint8Array(n);
+    for(let f = 0; f < n; f++) frames[f] = db[f] > thr ? 1 : 0;
+    fillRuns(frames, 0, 6, 1);                        // dips < 60ms inside speech = consonants, not pauses
+    fillRuns(frames, 1, 4, 0);                        // blips < 40ms = clicks/noise
+    let first = -1, last = -1;
+    for(let f = 0; f < n; f++){
+      if(frames[f]){ if(first < 0) first = f; last = f; }
+    }
+    if(first < 0) return null;
+    return { frames: frames, db: db, n: n, offset: offset,
+             firstTime: first * VOICE_HOP + offset, lastTime: (last + 1) * VOICE_HOP + offset };
+  }
+
+  // ----- text -> spoken form (what the CTC model has to "hear") -----
+  const ONES = ['zero','one','two','three','four','five','six','seven','eight','nine','ten','eleven','twelve',
+    'thirteen','fourteen','fifteen','sixteen','seventeen','eighteen','nineteen'];
+  const TENS = ['','','twenty','thirty','forty','fifty','sixty','seventy','eighty','ninety'];
+  const ORD_IRREG = { one:'first', two:'second', three:'third', five:'fifth', eight:'eighth', nine:'ninth', twelve:'twelfth' };
+
+  function numToWords(n){
+    if(n < 20) return ONES[n];
+    if(n < 100) return TENS[Math.floor(n / 10)] + (n % 10 ? ' ' + ONES[n % 10] : '');
+    if(n < 1000) return ONES[Math.floor(n / 100)] + ' hundred' + (n % 100 ? ' ' + numToWords(n % 100) : '');
+    const units = [[1e12, 'trillion'], [1e9, 'billion'], [1e6, 'million'], [1e3, 'thousand']];
+    for(let u = 0; u < units.length; u++){
+      const v = units[u][0];
+      if(n >= v) return numToWords(Math.floor(n / v)) + ' ' + units[u][1] + (n % v ? ' ' + numToWords(n % v) : '');
+    }
+    return String(n);
+  }
+
+  function ordinalWords(n){
+    if(n >= 1e12) return String(n);
+    const parts = numToWords(n).split(' ');
+    const last = parts.pop();
+    parts.push(ORD_IRREG[last] || (/y$/.test(last) ? last.slice(0, -1) + 'ieth' : last + 'th'));
+    return parts.join(' ');
+  }
+
+  // 4-digit numbers that look like years are read the way people say them (1984 = nineteen eighty four)
+  function numberSpoken(raw){
+    const clean = raw.replace(/,/g, '');
+    if(!clean) return '';
+    if(clean.length > 12) return clean.split('').map(function(d){ return ONES[+d]; }).join(' ');
+    const n = parseInt(clean, 10);
+    if(clean.length === 4 && raw.indexOf(',') === -1 && ((n >= 1100 && n <= 1999) || (n >= 2010 && n <= 2099))){
+      const hi = Math.floor(n / 100), lo = n % 100;
+      return numToWords(hi) + (lo === 0 ? ' hundred' : (lo < 10 ? ' oh ' + ONES[lo] : ' ' + numToWords(lo)));
+    }
+    return numToWords(n);
+  }
+
+  function spokenForm(word){
+    let w = String(word).normalize('NFKD').replace(/[\u0300-\u036f]/g, '');
+    w = w.replace(/[\u2018\u2019\u02bc`\u00b4]/g, "'");
+    w = w.replace(/\$\s*(\d(?:[\d,]*\d)?(?:\.\d+)?)/g, '$1 dollars ')
+         .replace(/%/g, ' percent ').replace(/&/g, ' and ').replace(/\+/g, ' plus ').replace(/@/g, ' at ');
+    w = w.replace(/(\d+)(?:st|nd|rd|th)\b/gi, function(_, d){ return ' ' + ordinalWords(parseInt(d, 10)) + ' '; });
+    w = w.replace(/(\d(?:[\d,]*\d)?)(?:\.(\d+))?/g, function(_, whole, frac){
+      let s = ' ' + numberSpoken(whole);
+      if(frac) s += ' point ' + frac.split('').map(function(d){ return ONES[+d]; }).join(' ');
+      return s + ' ';
+    });
+    // LibriSpeech-style: letters + apostrophe only, every other symbol (hyphen, slash, dot...) is a word break
+    w = w.toUpperCase().replace(/[^A-Z' ]+/g, ' ');
+    return w.split(/\s+/).map(function(p){ return p.replace(/^'+|'+$/g, ''); }).filter(Boolean).join(' ');
+  }
+
+  function wordToTokenIds(word, vocab, delim){
+    const sp = spokenForm(word);
+    if(!sp) return [];
+    const ids = [];
+    sp.split(' ').forEach(function(part, pi){
+      if(pi > 0) ids.push(delim);
+      for(let k = 0; k < part.length; k++){
+        const id = vocab[part[k]];
+        if(id !== undefined) ids.push(id);
+      }
+    });
+    return ids;
+  }
+
+  // ----- CTC forced alignment (Viterbi over the blank-extended label sequence) -----
+  // em = { data: Float32Array log-probs [F*V], F, V, blank }, tokens = label ids (no blanks).
+  // Returns the first/last frame of every token, plus how many tokens the audio actually "agrees" with.
+  function ctcViterbi(em, tokens){
+    const F = em.F, V = em.V, d = em.data, L = tokens.length, S = 2 * L + 1, blank = em.blank, delim = em.delim;
+    if(!L || F < L) return null;
+    const NEG = -1e30;
+    const lab = new Int32Array(S);
+    for(let s = 0; s < S; s++) lab[s] = (s & 1) ? tokens[(s - 1) >> 1] : blank;
+    const skip = new Uint8Array(S);
+    for(let s = 3; s < S; s += 2) skip[s] = lab[s] !== lab[s - 2] ? 1 : 0;
+
+    let prev = new Float32Array(S).fill(NEG), cur = new Float32Array(S);
+    const bp = new Uint8Array(F * S);
+    prev[0] = d[blank];
+    if(S > 1) prev[1] = d[lab[1]];
+    for(let t = 1; t < F; t++){
+      const row = t * V, base = t * S;
+      for(let s = 0; s < S; s++){
+        let best = prev[s], b = 0;
+        if(s >= 1 && prev[s - 1] > best){ best = prev[s - 1]; b = 1; }
+        if(skip[s] && prev[s - 2] > best){ best = prev[s - 2]; b = 2; }
+        cur[s] = best + d[row + lab[s]];
+        bp[base + s] = b;
+      }
+      const tmp = prev; prev = cur; cur = tmp;
+    }
+    let s = (S >= 2 && prev[S - 2] > prev[S - 1]) ? S - 2 : S - 1;
+    if(prev[s] < NEG / 2) return null;
+    const st = new Int32Array(F);
+    for(let t = F - 1; t >= 0; t--){
+      st[t] = s;
+      if(t > 0) s -= bp[t * S + s];
+    }
+    const first = new Int32Array(L).fill(-1), last = new Int32Array(L).fill(-1);
+    for(let t = 0; t < F; t++){
+      const q = st[t];
+      if(q & 1){ const j = (q - 1) >> 1; if(first[j] < 0) first[j] = t; last[j] = t; }
+    }
+    let good = 0, cnt = 0;
+    for(let j = 0; j < L; j++){
+      if(tokens[j] === delim || first[j] < 0) continue;
+      let p = 0;
+      for(let t = first[j]; t <= last[j]; t++){ const v = Math.exp(d[t * V + tokens[j]]); if(v > p) p = v; }
+      cnt++;
+      if(p >= 0.25) good++;
+    }
+    return { first: first, last: last, conf: cnt ? good / cnt : 0 };
+  }
+
+  // ----- snap CTC word spikes to real word edges using the audio energy -----
+  function voiceFrameIdx(t){ return Math.max(0, Math.min(voice.n - 1, Math.round((t - voice.offset) / VOICE_HOP))); }
+
+  function walkBack(t, maxBack){           // start of the speech burst that contains time t
+    if(!voice) return Math.max(0, t - 0.06);
+    let f = voiceFrameIdx(t);
+    if(!voice.frames[f]){                  // spike can sit in a tiny dip: look a few frames back for speech
+      let k = f;
+      for(let i = 0; i < 6 && k > 0 && !voice.frames[k]; i++) k--;
+      if(voice.frames[k]) f = k;
+    }
+    const limit = Math.max(0, f - Math.round(maxBack / VOICE_HOP));
+    while(f > limit && voice.frames[f - 1]) f--;
+    return Math.max(0, f * VOICE_HOP + voice.offset);
+  }
+
+  function walkFwd(t, maxFwd){             // end of the speech burst that contains time t
+    if(!voice) return t + 0.08;
+    let f = voiceFrameIdx(t);
+    const limit = Math.min(voice.n - 1, f + Math.round(maxFwd / VOICE_HOP));
+    while(f < limit && voice.frames[f + 1]) f++;
+    return (f + 1) * VOICE_HOP + voice.offset;
+  }
+
+  // Boundary between two neighbouring words: a, b = end of previous word's last sound / start of next word's first sound.
+  // Real pause in between -> previous word ends where the pause starts, next word starts where it ends.
+  // Continuous speech -> both meet at the deepest energy dip.
+  function gapBoundary(a, b){
+    if(!(b > a)){ return [a, a]; }
+    if(!voice){                            // no usable energy info: long gap = pause, keep the next word close to its first sound
+      if(b - a > 0.14){ const pe = a + 0.08; return [pe, Math.max(pe, b - 0.05)]; }
+      const m = (a + b) / 2; return [m, m];
+    }
+    const f0 = voiceFrameIdx(a), f1 = Math.max(f0, voiceFrameIdx(b));
+    let bestLen = 0, bestS = -1, runS = -1;
+    for(let f = f0; f <= f1; f++){
+      if(!voice.frames[f]){ if(runS < 0) runS = f; }
+      if(runS >= 0 && (voice.frames[f] || f === f1)){
+        const end = voice.frames[f] ? f : f + 1;
+        if(end - runS > bestLen){ bestLen = end - runS; bestS = runS; }
+        runS = -1;
+      }
+    }
+    if(bestLen >= 3){                      // >= 30ms of real silence between the words
+      return [Math.max(a, bestS * VOICE_HOP + voice.offset), Math.min(b, (bestS + bestLen) * VOICE_HOP + voice.offset)];
+    }
+    let mi = f0, mv = 1e9;
+    for(let f = f0; f <= f1; f++){
+      const v = (voice.db[Math.max(0, f - 1)] + voice.db[f] + voice.db[Math.min(voice.n - 1, f + 1)]) / 3;
+      if(v < mv){ mv = v; mi = f; }
+    }
+    const t = Math.max(a, Math.min(b, (mi + 0.5) * VOICE_HOP + voice.offset));
+    return [t, t];
+  }
+
+  function refineBounds(sp){
+    const m = sp.length, starts = new Array(m), ends = new Array(m), out = new Array(m);
+    starts[0] = walkBack(sp[0].s, 0.25);
+    ends[m - 1] = walkFwd(sp[m - 1].e, 0.4);
+    for(let i = 1; i < m; i++){
+      const g = gapBoundary(sp[i - 1].e, sp[i].s);
+      ends[i - 1] = g[0];
+      starts[i] = g[1];
+    }
+    for(let i = 0; i < m; i++){
+      let s = starts[i], e = ends[i];
+      if(!(s < sp[i].e)) s = Math.min(sp[i].s, sp[i].e - CTC_HOP);
+      if(!(e > s)) e = s + CTC_HOP;
+      out[i] = { start: s, end: e };
+    }
+    return out;
+  }
+
+  // Words with nothing to say (a lone dash or emoji) get a zero-length slot, never the highlighted one.
+  function spreadToAllWords(n, idxs, refined){
+    const times = new Array(n);
+    for(let k = 0; k < idxs.length; k++) times[idxs[k]] = refined[k];
+    let nextStart = null;
+    for(let i = n - 1; i >= 0; i--){
+      if(times[i]) nextStart = times[i].start;
+      else if(nextStart !== null) times[i] = { start: nextStart, end: nextStart };
+    }
+    const tailEnd = refined[refined.length - 1].end;
+    for(let i = 0; i < n; i++){
+      if(!times[i]) times[i] = { start: tailEnd, end: tailEnd };
+      if(i > 0 && times[i].start < times[i - 1].start) times[i] = { start: times[i - 1].start, end: Math.max(times[i].end, times[i - 1].start) };
+    }
+    return times;
+  }
+
+  // Forced-align the caption words against the cached audio emissions.
+  function alignWordsToEmissions(words){
+    const em = ctcEmissions;
+    if(!em || !words.length) return null;
+    const toks = [], ranges = new Array(words.length);
+    for(let i = 0; i < words.length; i++){
+      const ids = wordToTokenIds(words[i], em.vocab, em.delim);
+      if(!ids.length){ ranges[i] = null; continue; }
+      if(toks.length) toks.push(em.delim);
+      ranges[i] = [toks.length, toks.length + ids.length - 1];
+      for(let k = 0; k < ids.length; k++) toks.push(ids[k]);
+    }
+    if(!toks.length) return null;
+    const path = ctcViterbi(em, toks);
+    if(!path) return null;
+    const spikes = [], idxs = [];
+    for(let i = 0; i < words.length; i++){
+      if(!ranges[i]) continue;
+      const a = path.first[ranges[i][0]], b = path.last[ranges[i][1]];
+      if(a < 0 || b < 0) continue;
+      spikes.push({ s: a * CTC_HOP + AUDIO_LEAD_PAD, e: (b + 1) * CTC_HOP + AUDIO_LEAD_PAD });
+      idxs.push(i);
+    }
+    if(!spikes.length) return null;
+    return { times: spreadToAllWords(words.length, idxs, refineBounds(spikes)), conf: path.conf };
+  }
+
+  // ----- fallback: Whisper word timestamps mapped onto the caption words -----
+  function normCmp(s){ return String(s).toLowerCase().normalize('NFKD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]/g, ''); }
+
+  function lev(a, b){
+    const m = a.length, n = b.length;
+    let prev = new Array(n + 1), cur = new Array(n + 1);
+    for(let j = 0; j <= n; j++) prev[j] = j;
+    for(let i = 1; i <= m; i++){
+      cur[0] = i;
+      for(let j = 1; j <= n; j++){
+        cur[j] = Math.min(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
+      }
+      const t = prev; prev = cur; cur = t;
+    }
+    return prev[n];
+  }
+
+  function wordSim(a, b){
+    if(a === b) return a ? 3 : 0;
+    const mx = Math.max(a.length, b.length);
+    if(mx < 3) return -2;
+    return (1 - lev(a, b) / mx) >= 0.6 ? 1 : -2;
+  }
+
+  function wordWeight(w){
+    return w.replace(/[^\p{L}\p{N}\p{M}]/gu, '').length + 1.2;
+  }
+
+  function mapWhisperToWords(words){
+    const W = wordTimestamps;
+    if(!W || !W.length || !words.length) return null;
+    const n = words.length, m = W.length, C = m + 1, GAP = -1;
+    const A = words.map(normCmp), B = W.map(function(w){ return normCmp(w.text); });
+    const score = new Float32Array((n + 1) * C), tb = new Uint8Array((n + 1) * C);
+    for(let i = 1; i <= n; i++){ score[i * C] = i * GAP; tb[i * C] = 1; }
+    for(let j = 1; j <= m; j++){ score[j] = j * GAP; tb[j] = 2; }
+    for(let i = 1; i <= n; i++){
+      for(let j = 1; j <= m; j++){
+        const diag = score[(i - 1) * C + j - 1] + wordSim(A[i - 1], B[j - 1]);
+        const up = score[(i - 1) * C + j] + GAP;
+        const left = score[i * C + j - 1] + GAP;
+        let best = diag, t = 0;
+        if(up > best){ best = up; t = 1; }
+        if(left > best){ best = left; t = 2; }
+        score[i * C + j] = best; tb[i * C + j] = t;
+      }
+    }
+    const anchor = new Array(n).fill(null);
+    let i = n, j = m;
+    while(i > 0 || j > 0){
+      const t = (i === 0) ? 2 : (j === 0 ? 1 : tb[i * C + j]);
+      if(t === 0){
+        if(wordSim(A[i - 1], B[j - 1]) > 0) anchor[i - 1] = W[j - 1];
+        i--; j--;
+      } else if(t === 1) i--; else j--;
+    }
+    if(!anchor.some(Boolean)) return null;
+
+    const times = new Array(n);
+    for(let k = 0; k < n; k++) if(anchor[k]) times[k] = { start: anchor[k].start, end: Math.max(anchor[k].end, anchor[k].start) };
+    for(let k = 0; k < n; ){
+      if(times[k]){ k++; continue; }
+      let e = k;
+      while(e + 1 < n && !times[e + 1]) e++;
+      const left = k > 0 ? times[k - 1].end : (voice ? voice.firstTime : AUDIO_LEAD_PAD);
+      let right = e < n - 1 ? times[e + 1].start : (voice ? voice.lastTime : AUDIO_LEAD_PAD + narrationDuration);
+      if(right < left) right = left;
+      let total = 0;
+      for(let q = k; q <= e; q++) total += wordWeight(words[q]);
+      let acc = 0;
+      for(let q = k; q <= e; q++){
+        const s = left + (right - left) * acc / total;
+        acc += wordWeight(words[q]);
+        times[q] = { start: s, end: left + (right - left) * acc / total };
+      }
+      k = e + 1;
+    }
+    for(let k = 1; k < n; k++) if(times[k].start < times[k - 1].start) times[k].start = times[k - 1].start;
+    return times;
+  }
+
+  // ----- pick the best timing source for the current caption text (cached per text) -----
+  function getWordTimes(words){
+    const key = words.join(' ');
+    if(wordTimesCache && wordTimesCache.key === key && wordTimesCache.ver === alignVersion) return wordTimesCache.result;
+    let result = { mode: 'none', times: null, conf: 0 };
+    if(ctcEmissions){
+      try{
+        const a = alignWordsToEmissions(words);
+        if(a) result = { mode: 'exact', times: a.times, conf: a.conf };
+      }catch(err){ console.warn('Forced alignment failed, using fallback:', err); }
+    }
+    if(!result.times && wordTimestamps && wordTimestamps.length){
+      const t = mapWhisperToWords(words);
+      if(t) result = { mode: 'whisper', times: t, conf: 0 };
+    }
+    wordTimesCache = { key: key, ver: alignVersion, result: result };
+    return result;
+  }
+
+  function invalidateWordTimes(){ alignVersion++; wordTimesCache = null; layoutCache = null; }
+
+  // ----- caption screens: max N words, broken on sentence end > comma > real pause -----
+  function buildScreenPlan(words){
+    const n = words.length, MAXW = (CANVAS_H / CANVAS_W > 1.5) ? MAX_WORDS_VERTICAL : MAX_WORDS_PER_CHUNK;
+    const sync = n ? getWordTimes(words) : { mode: 'none', times: null, conf: 0 };
+    const times = sync.times;
+    const screens = [];
+    if(!times){
+      for(let i = 0; i < n; i += MAXW) screens.push({ first: i, last: Math.min(n, i + MAXW) - 1 });
+    } else {
+      let i = 0;
+      while(i < n){
+        const maxJ = Math.min(n - 1, i + MAXW - 1);
+        let bestJ = maxJ, bestScore = -1e9;
+        for(let j = i; j <= maxJ; j++){
+          const cnt = j - i + 1, tail = n - 1 - j;
+          let sc;
+          if(j === n - 1){
+            sc = 3;
+          } else {
+            const w = words[j];
+            sc = /[.!?\u2026]["'\u201d\u2019)\]]*$/.test(w) ? 3 : (/[,;:\u2014\u2013-]["'\u201d\u2019)\]]*$/.test(w) ? 1.5 : 0);
+            sc += Math.min(Math.max(0, times[j + 1].start - times[j].end), 0.5) * 5;
+            if(tail < 3) sc -= 2;                       // don't leave a 1-2 word orphan screen
+            if(cnt < MIN_SCREEN_WORDS) sc -= 3;
+          }
+          sc += cnt * 0.03;
+          if(sc >= bestScore){ bestScore = sc; bestJ = j; }
+        }
+        screens.push({ first: i, last: bestJ });
+        i = bestJ + 1;
+      }
+    }
+    const screenOfWord = new Int32Array(n);
+    screens.forEach(function(sc, k){ for(let w = sc.first; w <= sc.last; w++) screenOfWord[w] = k; });
+    return { screens: screens, screenOfWord: screenOfWord, times: times, mode: sync.mode, conf: sync.conf, timed: !!times };
+  }
+
+  // highlighted word = last word whose own start time has passed
+  function wordIndexAt(times, t){
+    if(!times.length || t < times[0].start) return 0;
+    let lo = 0, hi = times.length - 1;
+    while(lo < hi){
+      const mid = (lo + hi + 1) >> 1;
+      if(times[mid].start <= t) lo = mid; else hi = mid - 1;
+    }
+    return lo;
+  }
+
+  // ----- audio -> CTC emissions (chunked so long voiceovers stay light on memory) -----
+  const CTC_CORE = 160000, CTC_CTX = 24000, CTC_FRAME = 320, CTC_RF = 400;   // 10s core + 1.5s context each side (16kHz samples, all multiples of 320)
+
+  function logSoftmaxRow(src, off, V, dst, dOff){
+    let mx = -Infinity;
+    for(let k = 0; k < V; k++) if(src[off + k] > mx) mx = src[off + k];
+    let sum = 0;
+    for(let k = 0; k < V; k++) sum += Math.exp(src[off + k] - mx);
+    const lse = mx + Math.log(sum);
+    for(let k = 0; k < V; k++) dst[dOff + k] = src[off + k] - lse;
+  }
+
+  // runChunk(rawSamples, startSample) -> Promise<{ data: Float32Array logits, T, V }>
+  async function computeEmissions(samples, runChunk, onProgress){
+    const N = samples.length;
+    if(N < CTC_RF + CTC_FRAME) return null;
+    const F = Math.floor((N - CTC_RF) / CTC_FRAME) + 1;
+    const chunks = Math.ceil(N / CTC_CORE);
+    let V = 0, data = null;
+    for(let c = 0, a = 0; a < N; c++, a += CTC_CORE){
+      const b = Math.min(N, a + CTC_CORE);
+      const s = Math.max(0, a - CTC_CTX), e = Math.min(N, b + CTC_CTX);
+      if(onProgress) onProgress(c, chunks);
+      const out = await runChunk(samples.subarray(s, e), s);
+      if(!data){ V = out.V; data = new Float32Array(F * V); }
+      const g0 = a / CTC_FRAME, g1 = (b === N) ? F : Math.min(F, b / CTC_FRAME);
+      for(let g = g0; g < g1; g++){
+        const local = g - s / CTC_FRAME;
+        if(local < 0 || local >= out.T) continue;
+        logSoftmaxRow(out.data, local * V, V, data, g * V);
+      }
+    }
+    return { data: data, F: F, V: V };
+  }
+
+  function getWords(){
+    return paragraphInput.value.trim().split(/\s+/).filter(Boolean);
+  }
+
+  // ---------- Auto-transcribe + exact word alignment of an attached narration track (all client-side) ----------
+  const TRANSFORMERS_URL = 'https://cdn.jsdelivr.net/npm/@xenova/transformers@2.17.2';
+  const CTC_MODEL_ID = 'Xenova/wav2vec2-base-960h';   // character-level CTC model used only for timing (forced alignment)
+  const CTC_VOCAB_FALLBACK = {'<pad>':0,'<s>':1,'</s>':2,'<unk>':3,'|':4,E:5,T:6,A:7,O:8,N:9,I:10,H:11,S:12,R:13,D:14,L:15,U:16,
+    M:17,W:18,C:19,F:20,G:21,Y:22,P:23,B:24,V:25,K:26,"'":27,X:28,J:29,Q:30,Z:31};
+
+  function getTransformers(){
+    if(!transformersPromise){
+      transformersPromise = import(TRANSFORMERS_URL);
+      transformersPromise.catch(function(){ transformersPromise = null; });
+    }
+    return transformersPromise;
+  }
+
+  // Multilingual Whisper (not the .en-only tiny model) so Hindi speech transcribes correctly.
+  // 'small' gives noticeably more reliable Hindi decoding than 'base' — 'base' is prone to sliding
+  // into the wrong script (Urdu/Arabic instead of Devanagari) on accented or synthetic (TTS) voices,
+  // and to repetition hallucination loops near silence. Bigger one-time download (~250MB vs ~140MB).
+  const WHISPER_MODEL_ID = 'Xenova/whisper-small';
+
+  // Whisper's actual forward pass is a long, mostly-synchronous WASM computation — running it on
+  // the main thread blocks all repaints and timers for that whole stretch, which is exactly why the
+  // status text (and any % ticker) used to freeze mid-transcription. Running it in a Worker keeps the
+  // main thread free so the UI (and our progress ticker) keeps updating live while it computes.
+  let whisperWorker = null;
+  let whisperWorkerReqId = 0;
+  const whisperWorkerCallbacks = {};
+
+  function getWhisperWorker(){
+    if(!whisperWorker){
+      const code = [
+        'let pipelinePromise = null;',
+        'function getPipeline(modelId, onProgress){',
+        '  if(!pipelinePromise){',
+        '    pipelinePromise = import(' + JSON.stringify(TRANSFORMERS_URL) + ').then(function(mod){',
+        '      return mod.pipeline("automatic-speech-recognition", modelId, {',
+        '        quantized: true,',
+        '        progress_callback: function(p){',
+        '          if(p && p.status === "progress" && typeof p.progress === "number" && /onnx/i.test(p.file || "")){',
+        '            onProgress(p.progress);',
+        '          }',
+        '        }',
+        '      });',
+        '    });',
+        '    pipelinePromise.catch(function(){ pipelinePromise = null; });',
+        '  }',
+        '  return pipelinePromise;',
+        '}',
+        'self.onmessage = async function(e){',
+        '  const msg = e.data;',
+        '  if(!msg || msg.type !== "transcribe") return;',
+        '  try{',
+        '    const transcriber = await getPipeline(msg.modelId, function(pct){ self.postMessage({ type: "progress", id: msg.id, pct: pct }); });',
+        '    const output = await transcriber(msg.audio, msg.options);',
+        '    self.postMessage({ type: "result", id: msg.id, output: output });',
+        '  }catch(err){',
+        '    self.postMessage({ type: "error", id: msg.id, message: (err && err.message) || String(err) });',
+        '  }',
+        '};'
+      ].join('\n');
+      const blob = new Blob([code], { type: 'text/javascript' });
+      whisperWorker = new Worker(URL.createObjectURL(blob), { type: 'module' });
+      whisperWorker.onmessage = function(e){
+        const msg = e.data, cb = whisperWorkerCallbacks[msg.id];
+        if(!cb) return;
+        if(msg.type === 'progress'){ cb.onProgress && cb.onProgress(msg.pct); }
+        else if(msg.type === 'result'){ cb.resolve(msg.output); delete whisperWorkerCallbacks[msg.id]; }
+        else if(msg.type === 'error'){ cb.reject(new Error(msg.message)); delete whisperWorkerCallbacks[msg.id]; }
+      };
+      whisperWorker.onerror = function(err){
+        Object.keys(whisperWorkerCallbacks).forEach(function(id){
+          whisperWorkerCallbacks[id].reject(err instanceof Error ? err : new Error('Whisper worker failed'));
+          delete whisperWorkerCallbacks[id];
+        });
+        whisperWorker = null;   // let the next attempt spin up a fresh worker
+      };
+    }
+    return whisperWorker;
+  }
+
+  function transcribeInWorker(modelId, audio, options, onProgress){
+    return new Promise(function(resolve, reject){
+      const worker = getWhisperWorker();
+      const id = ++whisperWorkerReqId;
+      whisperWorkerCallbacks[id] = { resolve: resolve, reject: reject, onProgress: onProgress };
+      worker.postMessage({ type: 'transcribe', id: id, modelId: modelId, audio: audio, options: options });
+    });
+  }
+
+  // ---------- Devanagari -> Hinglish (Roman script) transliteration ----------
+  // Whisper transcribes Hindi speech into Devanagari script; captions here need Hinglish, so every
+  // transcript is romanized before it lands in the caption box or gets matched to word timestamps.
+  // Simple rule-based mapping (independent vowels, matras, virama-joined conjuncts, anusvara/visarga)
+  // plus a schwa-deletion heuristic (drop a word's trailing inherent "a" once it has 2+ consonants,
+  // e.g. "कमल" -> "kamal" not "kamala") so the output reads like natural Hinglish.
+  var DEV_VOWELS = {'अ':'a','आ':'aa','इ':'i','ई':'ee','उ':'u','ऊ':'oo','ऋ':'ri','ॠ':'ri',
+    'ए':'e','ऐ':'ai','ओ':'o','औ':'au'};
+  var DEV_MATRAS = {'ा':'aa','ि':'i','ी':'ee','ु':'u','ू':'oo','ृ':'ri','ॄ':'ri',
+    'े':'e','ै':'ai','ो':'o','ौ':'au'};
+  var DEV_CONS = {
+    'क':'k','ख':'kh','ग':'g','घ':'gh','ङ':'ng','च':'ch','छ':'chh','ज':'j','झ':'jh','ञ':'ny',
+    'ट':'t','ठ':'th','ड':'d','ढ':'dh','ण':'n','त':'t','थ':'th','द':'d','ध':'dh','न':'n',
+    'प':'p','फ':'ph','ब':'b','भ':'bh','म':'m','य':'y','र':'r','ल':'l','व':'v',
+    'श':'sh','ष':'sh','स':'s','ह':'h',
+    'क़':'q','ख़':'kh','ग़':'g','ज़':'z','ड़':'r','ढ़':'rh','फ़':'f','य़':'y','ऱ':'r','ऴ':'l','ळ':'l'
+  };
+  var DEV_CONJ = {'क्ष':'ksh','त्र':'tr','ज्ञ':'gya','श्र':'shr'};
+  var DEV_DIGITS = {'०':'0','१':'1','२':'2','३':'3','४':'4','५':'5','६':'6','७':'7','८':'8','९':'9'};
+  var DEV_VIRAMA='्', DEV_ANUSVARA='ं', DEV_CHANDRA='ँ', DEV_VISARGA='ः', DEV_NUKTA='़', DEV_AVAGRAHA='ऽ';
+  // Nukta letters (ज़/ड़/फ़ etc.) are NOT recomposed by NFC (Devanagari nukta forms are a Unicode
+  // composition exclusion), so a base+nukta sequence has to be caught here and remapped explicitly.
+  var DEV_NUKTA_MAP = {'क':'q','ख':'kh','ग':'g','ज':'z','ड':'r','ढ':'rh','फ':'f','य':'y'};
+
+  function transliterateDevWord(word){
+    var out='', i=0, n=word.length, pendingA=false, consCount=0;
+    function flush(){ if(pendingA){ out+='a'; pendingA=false; } }
+    while(i<n){
+      var three=word.substr(i,3);
+      if(DEV_CONJ[three]){ flush(); out+=DEV_CONJ[three]; pendingA=true; consCount++; i+=3; continue; }
+      var ch=word[i];
+      if(DEV_VOWELS[ch]){ flush(); out+=DEV_VOWELS[ch]; i++; continue; }
+      if(DEV_DIGITS[ch]){ flush(); out+=DEV_DIGITS[ch]; i++; continue; }
+      if(ch===DEV_NUKTA || ch===DEV_AVAGRAHA){ i++; continue; }
+      if(ch===DEV_ANUSVARA || ch===DEV_CHANDRA){ pendingA=false; out+='n'; i++; continue; }
+      if(ch===DEV_VISARGA){ pendingA=false; out+='h'; i++; continue; }
+      if(ch===DEV_VIRAMA){ pendingA=false; i++; continue; }
+      if(DEV_MATRAS[ch]){ pendingA=false; out+=DEV_MATRAS[ch]; i++; continue; }
+      if(DEV_CONS[ch]){
+        flush();
+        if(word[i+1]===DEV_NUKTA && DEV_NUKTA_MAP[ch]){ out+=DEV_NUKTA_MAP[ch]; i+=2; }
+        else { out+=DEV_CONS[ch]; i++; }
+        pendingA=true; consCount++; continue;
+      }
+      flush();
+      if(ch==='।'||ch==='॥'){ out+='.'; i++; continue; }
+      out+=ch; i++;
+    }
+    if(pendingA && consCount>1) pendingA=false; else flush();
+    return out;
+  }
+
+  // ---------- Hallucination cleanup ----------
+  // Whisper-base/small on Hindi occasionally (a) slips into the wrong script entirely — usually
+  // Urdu/Arabic, sometimes an unrelated Indic script like Tamil — instead of Devanagari, and
+  // (b) falls into a degenerate loop repeating one short token over and over, typically near
+  // trailing silence. devanagariToHinglish() only ever touches the Devanagari Unicode block, so
+  // wrong-script text used to pass straight through untouched and show up verbatim in the caption.
+  // Since this app only ever expects Hindi (Devanagari) or already-Latin words, anything outside
+  // those + digits/punctuation/whitespace is mistranscription, not real content — drop it.
+  var ALLOWED_TEXT_RE = /[^\u0900-\u097F\u0020-\u007E\u2018\u2019\u201C\u201D\u2013\u2014\s]/g;
+  function stripWrongScript(str){
+    if(!str) return str;
+    return String(str).replace(ALLOWED_TEXT_RE, '').replace(/\s{2,}/g, ' ').trim();
+  }
+  // Cuts off a run of 4+ consecutive repeats of the same (short) word — the classic Whisper
+  // repetition-loop hallucination — keeping just one copy instead of dozens.
+  function trimHallucinationLoop(str){
+    if(!str) return str;
+    return String(str).replace(/\b(\S{1,12})(?:\s+\1){3,}\b/gi, '$1');
+  }
+
+  function devanagariToHinglish(str){
+    if(!str) return str;
+    var cleaned = trimHallucinationLoop(stripWrongScript(str));
+    // NFC first: nukta letters (ज़/ड़/फ़ etc.) can arrive as base+nukta and must recompose to
+    // match the DEV_CONS keys above, or they'd silently fall back to the non-nukta sound (j vs z).
+    return cleaned.normalize('NFC').replace(/[\u0900-\u097F]+/g, function(run){ return transliterateDevWord(run); });
+  }
+
+  function getCtcModel(mod){
+    if(!ctcModelPromise){
+      ctcModelPromise = mod.AutoModelForCTC.from_pretrained(CTC_MODEL_ID, {
+        quantized: true,
+        progress_callback: function(p){
+          if(p && p.status === 'progress' && typeof p.progress === 'number' && /onnx/i.test(p.file || '')){
+            transcribeStatus.textContent = 'Exact-sync model download ho raha hai: ' + p.progress.toFixed(2) + '% (sirf pehli baar)';
+          }
+        }
+      });
+      ctcModelPromise.catch(function(){ ctcModelPromise = null; });
+    }
+    return ctcModelPromise;
+  }
+
+  // The model's own label list, so letter -> id can never drift from what the model outputs.
+  async function loadCtcVocab(){
+    if(ctcVocabCache) return ctcVocabCache;
+    let v = null;
+    try{
+      const ctrl = new AbortController();
+      const timer = setTimeout(function(){ ctrl.abort(); }, 6000);
+      const res = await fetch('https://huggingface.co/' + CTC_MODEL_ID + '/resolve/main/vocab.json', { signal: ctrl.signal });
+      clearTimeout(timer);
+      if(res.ok){
+        const j = await res.json();
+        if(j && typeof j['|'] === 'number' && typeof j.E === 'number' && typeof j.Z === 'number') v = j;
+      }
+    }catch(e){ /* offline / blocked: built-in copy below is the same list */ }
+    ctcVocabCache = v || CTC_VOCAB_FALLBACK;
+    return ctcVocabCache;
+  }
+
+  async function runCtcChunk(mod, model, raw){
+    await new Promise(function(r){ setTimeout(r, 30); });      // let the status text paint before the heavy step
+    const n = raw.length;
+    let mean = 0;
+    for(let i = 0; i < n; i++) mean += raw[i];
+    mean /= n;
+    let v = 0;
+    for(let i = 0; i < n; i++){ const d = raw[i] - mean; v += d * d; }
+    const inv = 1 / Math.sqrt(v / n + 1e-7);
+    const x = new Float32Array(n);
+    for(let i = 0; i < n; i++) x[i] = (raw[i] - mean) * inv;
+    const out = await model({ input_values: new mod.Tensor('float32', x, [1, n]) });
+    const lg = out.logits;
+    return { data: lg.data, T: lg.dims[1], V: lg.dims[2] };
+  }
+
+  async function buildCtcEmissions(samples16k){
+    transcribeStatus.textContent = 'Exact-sync model load ho raha hai (pehli baar ~95MB)...';
+    const mod = await getTransformers();
+    const model = await getCtcModel(mod);
+    const vocab = await loadCtcVocab();
+    const em = await computeEmissions(samples16k, function(raw){ return runCtcChunk(mod, model, raw); }, function(c, n){
+      transcribeStatus.textContent = 'Exact sync: voiceover analyze ho raha hai: ' + (((c + 1) / n) * 100).toFixed(2) + '%...';
+    });
+    if(!em) throw new Error('audio too short for alignment');
+    let maxId = 0;
+    Object.keys(vocab).forEach(function(k){ if(vocab[k] > maxId) maxId = vocab[k]; });
+    if(maxId >= em.V) throw new Error('vocab does not match model output');
+    em.vocab = vocab;
+    em.blank = vocab['<pad>'] !== undefined ? vocab['<pad>'] : 0;
+    em.delim = vocab['|'];
+    return em;
+  }
+
+  async function decodeAudioFileToMono16k(file){
+    const arrayBuffer = await file.arrayBuffer();
+    const AudioCtx = window.AudioContext || window.webkitAudioContext;
+    const probeCtx = new AudioCtx();
+    const audioBuffer = await probeCtx.decodeAudioData(arrayBuffer);
+    const duration = audioBuffer.duration;
+    const offlineCtx = new OfflineAudioContext(1, Math.ceil(duration * 16000), 16000);
+    const src = offlineCtx.createBufferSource();
+    src.buffer = audioBuffer;
+    src.connect(offlineCtx.destination);
+    src.start(0);
+    const rendered = await offlineCtx.startRendering();
+    probeCtx.close();
+    return { data: rendered.getChannelData(0), duration: duration, original: audioBuffer };
+  }
+
+  // ---------- Pad narration with 1s silence at head + tail, so there's always a held frame
+  // before the voice starts and after it ends — audio length itself is never compromised ----------
+  function padAudioBuffer(buffer){
+    const AudioCtx = window.AudioContext || window.webkitAudioContext;
+    const tempCtx = new AudioCtx();
+    const sr = buffer.sampleRate;
+    const leadFrames = Math.round(AUDIO_LEAD_PAD * sr);
+    const tailFrames = Math.round(AUDIO_TAIL_PAD * sr);
+    const totalFrames = leadFrames + buffer.length + tailFrames;
+    const padded = tempCtx.createBuffer(buffer.numberOfChannels, totalFrames, sr);
+    for(let ch = 0; ch < buffer.numberOfChannels; ch++){
+      padded.getChannelData(ch).set(buffer.getChannelData(ch), leadFrames);
+    }
+    tempCtx.close();
+    return padded;
+  }
+
+  function bufferToWav(buffer){
+    const numChannels = buffer.numberOfChannels;
+    const sampleRate = buffer.sampleRate;
+    const numFrames = buffer.length;
+    const blockAlign = numChannels * 2;
+    const dataSize = numFrames * blockAlign;
+    const out = new ArrayBuffer(44 + dataSize);
+    const view = new DataView(out);
+    function writeStr(offset, str){ for(let i=0;i<str.length;i++) view.setUint8(offset+i, str.charCodeAt(i)); }
+    writeStr(0,'RIFF'); view.setUint32(4, 36+dataSize, true); writeStr(8,'WAVE');
+    writeStr(12,'fmt '); view.setUint32(16,16,true); view.setUint16(20,1,true);
+    view.setUint16(22,numChannels,true); view.setUint32(24,sampleRate,true);
+    view.setUint32(28,sampleRate*blockAlign,true); view.setUint16(32,blockAlign,true); view.setUint16(34,16,true);
+    writeStr(36,'data'); view.setUint32(40,dataSize,true);
+    const channelData = [];
+    for(let ch=0; ch<numChannels; ch++) channelData.push(buffer.getChannelData(ch));
+    let offset = 44;
+    for(let i=0; i<numFrames; i++){
+      for(let ch=0; ch<numChannels; ch++){
+        let sample = Math.max(-1, Math.min(1, channelData[ch][i]));
+        sample = sample < 0 ? sample * 0x8000 : sample * 0x7FFF;
+        view.setInt16(offset, sample, true);
+        offset += 2;
+      }
+    }
+    return new Blob([out], { type: 'audio/wav' });
+  }
+
+  // Whisper returns lowercase transcripts — convert to Proper Case (first letter of every word capitalized)
+  // so the on-screen caption/title doesn't look all-lowercase.
+  function toProperCase(str){
+    return str.split(' ').map(function(w){
+      if(!w) return w;
+      return w.charAt(0).toUpperCase() + w.slice(1).toLowerCase();
+    }).join(' ');
+  }
+
+  function refreshSyncStatus(edited){
+    if(!narrationAudio.src || !getWords().length) return;
+    const plan = getLayout().plan;
+    const n = getWords().length;
+    transcribeStatus.style.display = 'block';
+    if(plan.mode === 'exact'){
+      if(plan.conf < 0.5){
+        transcribeStatus.className = 'status-line error';
+        transcribeStatus.textContent = 'Yeh text voiceover se kaafi alag lag raha hai (sirf ' + Math.round(plan.conf * 100) +
+          '% match) \u2014 word-to-word sync ke liye wahi text rakho jo audio mein bola gaya hai.';
+      } else {
+        transcribeStatus.className = 'status-line ready';
+        transcribeStatus.textContent = edited
+          ? 'Text edit hua \u2014 audio ke saath dobara word-to-word exact align ho gaya \u2713'
+          : 'Exact word sync \u2713 \u2014 ' + n + ' words, har word audio se align (' + fmtTime(narrationDuration) + ').';
+      }
+    } else if(plan.mode === 'whisper'){
+      transcribeStatus.className = 'status-line';
+      transcribeStatus.textContent = exactSyncToggle.checked
+        ? 'Approx sync (Whisper timing) \u2014 exact-sync model load nahi ho paya, isliye highlight thoda aage/peeche ho sakta hai. Internet check karke audio dobara attach karein.'
+        : 'Exact word sync off hai, Whisper timing use ho rahi hai (approx). Word-to-word match ke liye checkbox on karke audio dobara attach karein.';
+    } else {
+      transcribeStatus.className = 'status-line';
+      transcribeStatus.textContent = 'Audio attached, lekin word timing nahi mil paayi \u2014 highlight barabar speed se chalega.';
+    }
+  }
+
+  // For steps with no real progress signal (audio decode, the Whisper forward pass itself),
+  // ticks a live estimated % against a guessed duration so the status text keeps moving instead
+  // of sitting frozen on one line — capped short of 100% since it's a guess, then the caller's
+  // own next status line replaces it the moment the step actually finishes.
+  function startEtaProgress(label, estimateMs, shouldPause){
+    const start = Date.now();
+    const el = transcribeStatus;
+    el.textContent = label + ': 0.00% (approx)';
+    const timer = setInterval(function(){
+      if(shouldPause && shouldPause()) return;   // a real progress event landed very recently — let it stay visible
+      const p = Math.min(97, (Date.now() - start) / estimateMs * 97);
+      el.textContent = label + ': ' + p.toFixed(2) + '% (approx)';
+    }, 150);
+    return function stop(){ clearInterval(timer); };
+  }
+
+  async function transcribeAudioFile(file){
+    transcribing = true;
+    updateExportReady();
+    audioDropLabel.textContent = file.name + ' \u2014 processing...';
+    transcribeStatus.style.display = 'block';
+    transcribeStatus.className = 'status-line';
+    transcribeStatus.textContent = 'Audio decode ho raha hai...';
+    wordTimestamps = null;
+    ctcEmissions = null;
+    invalidateWordTimes();
+    try{
+      const decoded = await decodeAudioFileToMono16k(file);
+      narrationDuration = decoded.duration;
+      try{ voice = analyzeVoice(decoded.data, 16000, AUDIO_LEAD_PAD); }catch(vErr){ console.warn('Voice analysis skipped:', vErr); voice = null; }
+      try{ audioOnsets = detectOnsets(decoded.data, 16000); }catch(oErr){ console.warn('Onset/beat detection skipped:', oErr); audioOnsets = []; }
+
+      // Exact-word CTC forced-alignment only understands English phonemes, so it's disabled for
+      // Hindi audio — timing always comes from Whisper's own word-level timestamps instead.
+      const wantExact = false;
+      const keepScript = useScriptToggle.checked && getWords().length > 0;   // caption box already holds the script -> it stays as is
+      let whisperText = null;
+
+      async function runWhisper(){
+        transcribeStatus.textContent = 'Speech model load ho raha hai (pehli baar ~250-350MB, thoda time lagega)...';
+        let lastDownloadProgressAt = 0;
+        const stopEta = startEtaProgress(
+          'Transcribe ho raha hai (Hindi)',
+          Math.max(3000, narrationDuration * 1000 * 2.5),
+          function(){ return Date.now() - lastDownloadProgressAt < 500; }
+        );
+        let output;
+        try{
+          output = await transcribeInWorker(WHISPER_MODEL_ID, decoded.data, {
+            return_timestamps: 'word', chunk_length_s: 30, stride_length_s: 5,
+            language: 'hindi', task: 'transcribe'   // force Hindi decoding (Devanagari), romanized to Hinglish below
+          }, function(pct){
+            lastDownloadProgressAt = Date.now();
+            transcribeStatus.textContent = 'Speech model download ho raha hai: ' + pct.toFixed(2) + '% (sirf pehli baar)';
+          });
+        } finally { stopEta(); }
+        const chunks = (output.chunks || []).filter(function(c){ return c.text && c.text.trim(); })
+          .map(function(c){ return { text: devanagariToHinglish(c.text), timestamp: c.timestamp }; });
+
+        // Whisper stitches ~30s chunks together and its clock can drift a little per chunk. Only matters for the
+        // fallback timing: scale so the last detected word lines up with where the voice really ends.
+        let driftScale = 1;
+        if(chunks.length){
+          const lastChunk = chunks[chunks.length - 1];
+          const lastEnd = (lastChunk.timestamp[1] != null ? lastChunk.timestamp[1] : lastChunk.timestamp[0]);
+          const driftTarget = voice ? Math.max(0.1, voice.lastTime - AUDIO_LEAD_PAD) : narrationDuration;
+          if(lastEnd > 0.05) driftScale = Math.max(0.7, Math.min(1.3, driftTarget / lastEnd));
+        }
+        wordTimestamps = chunks.map(function(c){
+          return {
+            text: c.text.trim(),
+            start: c.timestamp[0] * driftScale + AUDIO_LEAD_PAD,
+            end: (c.timestamp[1] != null ? c.timestamp[1] : c.timestamp[0]) * driftScale + AUDIO_LEAD_PAD
+          };
+        });
+        whisperText = devanagariToHinglish((output.text || '').trim());
+      }
+
+      // Whisper is needed for the text (unless the caption box already has the script) and as the timing source.
+      if(!(wantExact && keepScript)) await runWhisper();
+      if(!keepScript && whisperText !== null) paragraphInput.value = toProperCase(whisperText);
+      invalidateWordTimes();
+
+      effectiveMaxSeconds = Math.min(MAX_TOTAL_SECONDS, AUDIO_LEAD_PAD + narrationDuration + AUDIO_TAIL_PAD);
+      const paddedBuffer = padAudioBuffer(decoded.original);
+      narrationAudio.src = URL.createObjectURL(bufferToWav(paddedBuffer));
+      audioGraphReady = false; // rebuild the export audio graph against the (now padded) narration track
+
+      if(rawClipsCache) finalizeClips(rawClipsCache);
+
+      audioDropLabel.textContent = file.name + ' attached';
+      const plan = getLayout().plan;
+      setSyncOffset(plan.mode === 'whisper' && !voice ? 600 : 0);   // exact mode needs no nudge; raw Whisper without VAD needed +600ms
+      refreshSyncStatus(false);
+      syncRow.style.display = 'flex';
+      syncOffsetEl.style.display = 'block';
+      syncHintEl.style.display = 'block';
+    }catch(err){
+      console.error('Transcription failed:', err);
+      wordTimestamps = null;
+      ctcEmissions = null;
+      voice = null;
+      audioOnsets = [];
+      invalidateWordTimes();
+      audioDropLabel.textContent = 'Hindi audio track choose karein (optional, auto-transcribe)';
+      transcribeStatus.className = 'status-line error';
+      transcribeStatus.textContent = 'Auto-transcribe fail ho gaya (internet ya browser support issue). Neeche paragraph khud type kar sakte ho.';
+      syncRow.style.display = 'none';
+      syncOffsetEl.style.display = 'none';
+      syncHintEl.style.display = 'none';
+    }finally{
+      transcribing = false;
+      updateExportReady();
+      drawStaticFrame();
+    }
+  }
+
+  audioInput.addEventListener('change', function(e){
+    const file = e.target.files && e.target.files[0];
+    if(!file) return;
+    transcribeAudioFile(file);
+  });
+
+  function updateExportReady(){
+    const words = getWords();
+    const textReady = words.length > 0;
+    btnExport.disabled = !(hasClips && textReady) || transcribing;
+    if(transcribing){
+      statusLine.textContent = 'Audio transcribe ho raha hai, thoda ruko...';
+    } else if(!hasClips && !textReady){
+      statusLine.textContent = 'Media aur text dono chahiye export ke liye.';
+    } else if(!hasClips){
+      statusLine.textContent = 'Ab video/image upload karein.';
+    } else if(!textReady){
+      statusLine.textContent = 'Ab caption paragraph dalein.';
+    } else {
+      statusLine.textContent = 'Export ke liye taiyaar.';
+    }
+    statusLine.className = 'status-line' + (btnExport.disabled ? '' : ' ready');
+  }
+
+  // ---------- Word-level layout, chunked into max 9-word captions ----------
+  function buildWordLayout(context, chunkWords, maxWidth){
+    const spaceWidth = context.measureText(' ').width;
+    const lines = [];
+    let currentWords = [];
+    let currentX = 0;
+    chunkWords.forEach(w => {
+      const width = context.measureText(w.text).width;
+      const adv = currentWords.length === 0 ? width : (currentX + spaceWidth + width);
+      if(adv > maxWidth && currentWords.length > 0){
+        lines.push(currentWords);
+        currentWords = [];
+        currentX = 0;
+      }
+      const x = currentWords.length === 0 ? 0 : (currentX + spaceWidth);
+      currentWords.push({ index: w.index, text: w.text, x: x, width: width });
+      currentX = x + width;
+    });
+    if(currentWords.length) lines.push(currentWords);
+    return lines;
+  }
+
+  function computeLayout(){
+    const words = getWords();
+    // 9:16 (Shorts/Reels): caption ko UI-safe zone ke andar rakhte hain.
+    // Top ~13% (status bar/search), bottom ~22% (title, subscribe/follow, audio) aur right ~12% (like/comment/share) khali.
+    const vertical = (CANVAS_H / CANVAS_W > 1.5);
+    let boxTop, boxHeight, padL, padR, maxLinesAllowed, startFont;
+    if(vertical){
+      boxTop = Math.round(CANVAS_H * 0.50);
+      boxHeight = Math.round(CANVAS_H * 0.28);      // 50% -> 78% height
+      padL = 36; padR = 90;
+      maxLinesAllowed = 3; startFont = 68;
+    } else {
+      boxTop = CANVAS_H - CANVAS_H/3;
+      boxHeight = CANVAS_H/3;
+      padL = LEFT_PAD; padR = RIGHT_PAD;
+      maxLinesAllowed = 99; startFont = 80;
+    }
+    const maxWidth = CANVAS_W - padL - padR;
+    const plan = buildScreenPlan(words);
+    const rawChunks = plan.screens.map(function(sc){
+      const arr = [];
+      for(let k = sc.first; k <= sc.last; k++) arr.push({ text: words[k], index: k });
+      return arr;
+    });
+    let fontSize = startFont;
+    let chunkLines, lineHeight, maxLines;
+
+    while(fontSize >= 32){
+      ctx.font = '700 ' + fontSize + 'px ' + CANVAS_FONT_STACK;
+      lineHeight = fontSize * (vertical ? 1.3 : 1.35);
+      chunkLines = rawChunks.map(c => buildWordLayout(ctx, c, maxWidth));
+      maxLines = chunkLines.reduce((m, lines) => Math.max(m, lines.length), 0);
+      if(maxLines <= maxLinesAllowed && maxLines * lineHeight <= boxHeight - (vertical ? 0 : 44)) break;
+      fontSize -= 4;
+    }
+    if(fontSize < 32) fontSize = 32;   // layout last 32px par measure hua tha
+    return { fontSize, lineHeight, boxTop, boxHeight, chunks: chunkLines, wordCount: words.length, plan: plan, vertical: vertical, padL: padL, maxWidth: maxWidth };
+  }
+
+  function getLayout(){
+    if(!layoutCache) layoutCache = computeLayout();
+    return layoutCache;
+  }
+
+  // ---------- Drawing ----------
+  const CAPTION_ANIM_SEC = 0.18;
+  let lastCaptionChunkIndex = -1;
+  let captionChunkStartT = 0;
+
+  function drawCaptionBox(activeWordIndex){
+    const { fontSize, lineHeight, boxTop, boxHeight, chunks, wordCount, plan, vertical, padL, maxWidth } = getLayout();
+    if(!wordCount) return;
+    const chunkIndex = plan.screenOfWord[Math.max(0, Math.min(wordCount - 1, activeWordIndex))];
+    const lines = chunks[chunkIndex];
+    if(!lines || !lines.length) return;
+
+    if(chunkIndex !== lastCaptionChunkIndex){
+      lastCaptionChunkIndex = chunkIndex;
+      captionChunkStartT = totalElapsed();
+    }
+    const animP = Math.min(1, Math.max(0, (totalElapsed() - captionChunkStartT) / CAPTION_ANIM_SEC));
+    const eased = 1 - Math.pow(1 - animP, 3); // ease-out cubic — text "pops" in then settles
+    const entryDY = (1 - eased) * 16;
+    const entryScale = 0.94 + 0.06 * eased;
+    const entryAlpha = eased;
+
+    if(vertical){
+      // 9:16: poori video ko kaala karne ki jagah halka soft scrim (sirf caption ke peeche)
+      const y0 = boxTop - CANVAS_H * 0.06, y1 = boxTop + boxHeight + CANVAS_H * 0.06;
+      const g = ctx.createLinearGradient(0, y0, 0, y1);
+      g.addColorStop(0, 'rgba(0,0,0,0)');
+      g.addColorStop(0.3, 'rgba(0,0,0,0.38)');
+      g.addColorStop(0.7, 'rgba(0,0,0,0.38)');
+      g.addColorStop(1, 'rgba(0,0,0,0)');
+      ctx.fillStyle = g;
+      ctx.fillRect(0, y0, CANVAS_W, y1 - y0);
+    } else {
+      const grad = ctx.createLinearGradient(0, boxTop, 0, CANVAS_H);
+      grad.addColorStop(0, 'rgba(0,0,0,0)');
+      grad.addColorStop(0.18, 'rgba(0,0,0,0.85)');
+      grad.addColorStop(0.4, 'rgba(0,0,0,0.98)');
+      grad.addColorStop(1, 'rgba(0,0,0,1)');
+      ctx.fillStyle = grad;
+      ctx.fillRect(0, boxTop, CANVAS_W, boxHeight);
+    }
+
+    const totalHeight = lines.length * lineHeight;
+    const yStart = boxTop + (boxHeight - totalHeight)/2 + lineHeight*0.78;
+
+    ctx.font = '700 ' + fontSize + 'px ' + CANVAS_FONT_STACK;
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'alphabetic';
+    ctx.lineJoin = 'round';
+    ctx.miterLimit = 2;
+
+    ctx.save();
+    ctx.globalAlpha = entryAlpha;
+    const boxCenterY = boxTop + boxHeight/2;
+    ctx.translate(CANVAS_W/2, boxCenterY);
+    ctx.scale(entryScale, entryScale);
+    ctx.translate(-CANVAS_W/2, -boxCenterY + entryDY);
+
+    // har line apni width ke hisaab se center hoti hai (last line left mein nahi latakti)
+    function lineOffsetX(lineWords){
+      const last = lineWords[lineWords.length - 1];
+      return padL + (maxWidth - (last.x + last.width)) / 2;
+    }
+    function pill(x, y, w, h, r){
+      ctx.beginPath();
+      if(ctx.roundRect) ctx.roundRect(x, y, w, h, r); else ctx.rect(x, y, w, h);
+      ctx.fill();
+    }
+
+    // Pass 1: black outline + soft shadow (normal words) aur highlight pill
+    const strokeW = Math.max(4, fontSize * 0.16);
+    let y = yStart;
+    lines.forEach(lineWords => {
+      const offX = lineOffsetX(lineWords);
+      lineWords.forEach(w => {
+        const px = offX + w.x;
+        if(w.index === activeWordIndex){
+          const padX = 6, padTop = fontSize*0.80, padBottom = fontSize*0.24;
+          ctx.fillStyle = HIGHLIGHT_COLOR;
+          pill(px - padX, y - padTop, w.width + padX*2, padTop + padBottom, fontSize*0.14);
+        } else {
+          ctx.save();
+          ctx.shadowColor = 'rgba(0,0,0,0.65)';
+          ctx.shadowBlur = 10;
+          ctx.shadowOffsetY = 3;
+          ctx.lineWidth = strokeW;
+          ctx.strokeStyle = '#000000';
+          ctx.strokeText(w.text, px, y);
+          ctx.restore();
+        }
+      });
+      y += lineHeight;
+    });
+
+    // Pass 2: text fill (highlight word = dark text on mint pill, baaki white)
+    y = yStart;
+    lines.forEach(lineWords => {
+      const offX = lineOffsetX(lineWords);
+      lineWords.forEach(w => {
+        ctx.fillStyle = (w.index === activeWordIndex) ? '#0A0A0A' : '#FFFFFF';
+        ctx.fillText(w.text, offX + w.x, y);
+      });
+      y += lineHeight;
+    });
+    ctx.restore();
+  }
+
+  function activeWordFor(t, duration, wordCount){
+    if(duration <= 0 || wordCount <= 0) return 0;
+    const perWord = duration / wordCount;
+    return Math.min(wordCount - 1, Math.floor(t / perWord));
+  }
+
+  function currentWordIndex(){
+    const words = getWords();
+    if(!words.length) return 0;
+    const plan = getLayout().plan;
+    if(plan && plan.times){
+      const rawT = (narrationAudio.src && !narrationAudio.paused) ? narrationAudio.currentTime : totalElapsed();
+      // "Highlight sync" slider = optional fine-tune: positive delays the screens/highlight, negative brings them earlier.
+      return wordIndexAt(plan.times, rawT - (syncOffsetMs / 1000) + HIGHLIGHT_LEAD);
+    }
+    return activeWordFor(totalElapsed(), effectiveDuration, words.length);
+  }
+
+  function drawVideoFrame(){
+    if(!video.videoWidth) return;
+    const vw = video.videoWidth, vh = video.videoHeight;
+    const targetAspect = CANVAS_W/CANVAS_H;
+    const srcAspect = vw/vh;
+    let sx, sy, sw, sh;
+    if(srcAspect > targetAspect){ sh = vh; sw = vh*targetAspect; sx = (vw-sw)/2; sy = 0; }
+    else { sw = vw; sh = vw/targetAspect; sx = 0; sy = (vh-sh)/2; }
+    ctx.drawImage(video, sx, sy, sw, sh, 0, 0, CANVAS_W, CANVAS_H);
+  }
+
+  // Draws one image layer cover-fit into the frame, with its own Ken Burns pan/zoom amplitude.
+  // ampScale/ampPan let a foreground layer travel further than the background for a parallax
+  // depth illusion (near things appear to move faster than far things); bob adds a slow vertical
+  // float so a foreground subject feels gently "alive" rather than pinned in place.
+  function drawImageLayer(img, combo, progress, opts){
+    opts = opts || {};
+    const ampScale = opts.ampScale != null ? opts.ampScale : 1;
+    const ampPan = opts.ampPan != null ? opts.ampPan : 1;
+    const bob = opts.bob || 0;
+    const fx = opts.focusX != null ? opts.focusX : 0.5;
+    const fy = opts.focusY != null ? opts.focusY : 0.5;
+
+    const targetAspect = CANVAS_W/CANVAS_H;
+    const iw = img.naturalWidth, ih = img.naturalHeight;
+    let baseW, baseH;
+    if(iw/ih > targetAspect){ baseH = ih; baseW = ih*targetAspect; }
+    else { baseW = iw; baseH = iw/targetAspect; }
+
+    const scale = 1 + (lerp(combo.startScale, combo.endScale, progress) - 1) * ampScale;
+    const cropW = Math.min(iw, baseW/scale);
+    const cropH = Math.min(ih, baseH/scale);
+    // Pan path is recentred on the chosen focus point (default 0.5,0.5 = image center) instead
+    // of always assuming the subject is centered — this is what "smart crop" actually changes.
+    const cx = fx + (lerp(combo.startCx, combo.endCx, progress) - 0.5) * ampPan;
+    const cy = fy + (lerp(combo.startCy, combo.endCy, progress) - 0.5) * ampPan;
+    let sx = cx*iw - cropW/2;
+    let sy = cy*ih - cropH/2;
+    sx = Math.max(0, Math.min(iw-cropW, sx));
+    sy = Math.max(0, Math.min(ih-cropH, sy));
+
+    const dy = bob ? Math.sin(progress * Math.PI * 2 + 1.2) * bob : 0;
+    ctx.drawImage(img, sx, sy, cropW, cropH, 0, dy, CANVAS_W, CANVAS_H);
+  }
+
+  function drawImageFrame(clip, forcedProgress){
+    const img = clip.img;
+    if(!img) return;
+    const combo = KEN_BURNS_COMBOS[clip.comboIdx] || KEN_BURNS_COMBOS[0];
+    let progress;
+    if(forcedProgress === undefined || forcedProgress === null){
+      const rawProgress = clip.usedDuration > 0 ? Math.min(1, getLocalElapsed()/clip.usedDuration) : 0;
+      progress = easeInOutCubic(rawProgress);
+    } else {
+      progress = forcedProgress;
+    }
+    const focusX = clip.focusX != null ? clip.focusX : 0.5;
+    const focusY = clip.focusY != null ? clip.focusY : 0.5;
+
+    drawImageLayer(img, combo, progress, { ampScale: 1, ampPan: 1, bob: 0, focusX: focusX, focusY: focusY });
+
+    // Foreground/subject PNG (if attached): moves ~1.5x faster than the background on the
+    // same camera path, which is what actually reads as "depth" rather than a flat photo.
+    if(clip.fgImg){
+      drawImageLayer(clip.fgImg, combo, progress, { ampScale: 1.45, ampPan: 1.6, bob: CANVAS_H * 0.012, focusX: focusX, focusY: focusY });
+    }
+  }
+
+  // ---------- Cinematic vignette + subtle color grade ----------
+  function drawCinematicGrade(){
+    const grad = ctx.createRadialGradient(CANVAS_W/2, CANVAS_H*0.42, CANVAS_H*0.25, CANVAS_W/2, CANVAS_H*0.5, CANVAS_H*0.78);
+    grad.addColorStop(0, 'rgba(0,0,0,0)');
+    grad.addColorStop(1, 'rgba(0,0,0,0.38)');
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, CANVAS_W, CANVAS_H);
+
+    ctx.save();
+    ctx.globalCompositeOperation = 'overlay';
+    ctx.globalAlpha = 0.10;
+    const wash = ctx.createLinearGradient(0, 0, 0, CANVAS_H);
+    wash.addColorStop(0, '#2a3a52');
+    wash.addColorStop(1, '#402a1a');
+    ctx.fillStyle = wash;
+    ctx.fillRect(0, 0, CANVAS_W, CANVAS_H);
+    ctx.restore();
+  }
+
+  function drawWatermark(){ drawWatermarkTo(ctx, CANVAS_W); }
+
+  function drawWatermarkTo(ctx, CANVAS_W){
+    const fontSize = Math.max(15, Math.round(CANVAS_W * 0.032));
+    const padOuter = Math.round(CANVAS_W * 0.035);
+    const boxPadX = Math.round(fontSize * 0.55);
+    const boxPadY = Math.round(fontSize * 0.38);
+
+    ctx.save();
+    ctx.font = '700 ' + fontSize + 'px ' + CANVAS_FONT_STACK;
+    ctx.textAlign = 'right';
+    ctx.textBaseline = 'top';
+
+    const textWidth = ctx.measureText(WATERMARK_TEXT).width;
+    const boxW = textWidth + boxPadX * 2;
+    const boxH = fontSize + boxPadY * 2;
+    const boxX = CANVAS_W - padOuter - boxW;
+    const boxY = (CANVAS_H / CANVAS_W > 1.5) ? Math.round(CANVAS_H * 0.14) : padOuter;   // 9:16: top UI ke neeche
+    const r = 6;
+
+    ctx.fillStyle = 'rgba(0,0,0,0.38)';
+    ctx.beginPath();
+    ctx.moveTo(boxX + r, boxY);
+    ctx.arcTo(boxX + boxW, boxY, boxX + boxW, boxY + boxH, r);
+    ctx.arcTo(boxX + boxW, boxY + boxH, boxX, boxY + boxH, r);
+    ctx.arcTo(boxX, boxY + boxH, boxX, boxY, r);
+    ctx.arcTo(boxX, boxY, boxX + boxW, boxY, r);
+    ctx.closePath();
+    ctx.fill();
+
+    ctx.fillStyle = 'rgba(255,255,255,0.95)';
+    ctx.shadowColor = 'rgba(0,0,0,0.55)';
+    ctx.shadowBlur = 4;
+    ctx.fillText(WATERMARK_TEXT, boxX + boxW - boxPadX, boxY + boxPadY);
+    ctx.restore();
+  }
+
+  // ---------- Transition compositing (variety, picked per cut in advance()) ----------
+  function drawTransitionFrame(type, p){
+    ctx.save();
+    if(type === 'punchZoom'){
+      const s = 1 + p*0.32;
+      ctx.globalAlpha = 1 - p;
+      const w = CANVAS_W*s, h = CANVAS_H*s;
+      ctx.drawImage(transitionSnapshot, (CANVAS_W-w)/2, (CANVAS_H-h)/2, w, h);
+    } else if(type === 'slideLeft' || type === 'slideRight'){
+      const dir = type === 'slideLeft' ? -1 : 1;
+      const ease = easeInOutCubic(p);
+      const dx = dir * CANVAS_W * ease;
+      ctx.drawImage(transitionSnapshot, dx, 0, CANVAS_W, CANVAS_H);
+    } else if(type === 'whipBlur'){
+      const dir = (lastComboIdx % 2 === 0) ? -1 : 1;
+      const blurPx = Math.round(16 * Math.sin(Math.min(1,p) * Math.PI));
+      ctx.filter = blurPx > 0 ? ('blur(' + blurPx + 'px)') : 'none';
+      ctx.globalAlpha = Math.max(0, 1 - p*1.05);
+      const dx = dir * CANVAS_W * 0.55 * p;
+      ctx.drawImage(transitionSnapshot, dx, 0, CANVAS_W, CANVAS_H);
+      ctx.filter = 'none';
+    } else { // crossfade
+      ctx.globalAlpha = 1 - p;
+      ctx.drawImage(transitionSnapshot, 0, 0, CANVAS_W, CANVAS_H);
+    }
+    ctx.restore();
+  }
+
+  // ---------- Hook-punch opening: brief zoom-settle on the very first ~0.35s of the export ----------
+  const HOOK_PUNCH_SEC = 0.35;
+  function applyHookPunchIfNeeded(){
+    const t = totalElapsed();
+    if(t < HOOK_PUNCH_SEC){
+      const p = easeInOutCubic(Math.min(1, t / HOOK_PUNCH_SEC));
+      const scale = 1.16 - 0.16*p;
+      ctx.translate(CANVAS_W/2, CANVAS_H/2);
+      ctx.scale(scale, scale);
+      ctx.translate(-CANVAS_W/2, -CANVAS_H/2);
+    }
+  }
+
+  function drawStaticFrame(){
+    setupStageCtx();
+    ctx.fillStyle = '#000';
+    ctx.fillRect(0,0,CANVAS_W,CANVAS_H);
+
+    if(hasClips){
+      const clip = clips[currentClipIdx];
+      ctx.save();
+      applyHookPunchIfNeeded();
+      if(clip.type === 'video') drawVideoFrame();
+      else if(clip.type === 'freeze'){
+        if(clip.refClip.type === 'video') drawVideoFrame();
+        else drawImageFrame(clip.refClip, clip.freezeAt === 'start' ? 0 : 1);
+      }
+      else drawImageFrame(clip);
+      ctx.restore();
+
+      if(cinematicGradeToggle.checked) drawCinematicGrade();
+    }
+
+    const layout = getLayout();
+    drawCaptionBox(currentWordIndex());
+
+    if(transitioning && transitionSnapshot){
+      const p = (performance.now() - transitionStart)/1000/currentTransitionDur;
+      if(p >= 1){
+        transitioning = false;
+      } else {
+        drawTransitionFrame(currentTransitionType, p);
+      }
+    }
+
+    drawWatermark();
+  }
+
+  // ---------- Preview playback ----------
+  btnPlay.addEventListener('click', function(){
+    if(!hasClips) return;
+    if(previewing){
+      previewing = false;
+      video.pause();
+      narrationAudio.pause();
+      btnPlay.textContent = '▶ Preview';
+      cancelAnimationFrame(rafId);
+      return;
+    }
+    currentClipIdx = 0;
+    globalElapsedBase = 0;
+    previewing = true;
+    lastCaptionChunkIndex = -1;
+    btnPlay.textContent = '⏸ Pause';
+    if(narrationAudio.src){ narrationAudio.currentTime = 0; narrationAudio.play().catch(function(){}); }
+    activateClip(0, previewLoop);
+  });
+
+  function previewLoop(){
+    if(!previewing) return;
+    drawStaticFrame();
+    timecodeEl.textContent = fmtTime(totalElapsed()) + ' / ' + fmtTime(effectiveDuration);
+
+    const usedDur = clips[currentClipIdx].usedDuration;
+    if(getLocalElapsed() >= usedDur - 0.03){
+      advance(function(){ rafId = requestAnimationFrame(previewLoop); }, function(){
+        previewing = false;
+        video.pause();
+        narrationAudio.pause();
+        btnPlay.textContent = '▶ Preview';
+      });
+      return;
+    }
+    rafId = requestAnimationFrame(previewLoop);
+  }
+
+  // ---------- Export ----------
+  function pickMime(){
+    const candidates = [
+      'video/mp4;codecs=h264,aac','video/mp4',
+      'video/webm;codecs=vp9,opus','video/webm;codecs=vp8,opus','video/webm'
+    ];
+    for(const m of candidates){
+      if(window.MediaRecorder && MediaRecorder.isTypeSupported && MediaRecorder.isTypeSupported(m)) return m;
+    }
+    return '';
+  }
+
+  function ensureAudioGraph(){
+    if(audioGraphReady) return true;
+    try{
+      const AudioCtx = window.AudioContext || window.webkitAudioContext;
+      audioCtx = new AudioCtx();
+      const sourceEl = narrationAudio.src ? narrationAudio : video;
+      const source = audioCtx.createMediaElementSource(sourceEl);
+      audioDestination = audioCtx.createMediaStreamDestination();
+      source.connect(audioDestination);
+      source.connect(audioCtx.destination);
+      audioGraphReady = true;
+    }catch(err){ audioGraphReady = false; }
+    return audioGraphReady;
+  }
+
+  btnExport.addEventListener('click', function(){
+    if(isRecording || !hasClips) return;
+    layoutCache = null;
+    if(previewing){ previewing = false; cancelAnimationFrame(rafId); }
+    startExport();
+  });
+
+  function startExport(){
+    isRecording = true;
+    lastCaptionChunkIndex = -1;
+    btnExport.disabled = true;
+    btnPlay.disabled = true;
+    downloadBox.style.display = 'none';
+    progressFill.style.width = '0%';
+    statusLine.className = 'status-line';
+    statusLine.textContent = 'Export shuru ho raha hai...';
+
+    chosenMime = pickMime();
+    if(!chosenMime){
+      statusLine.className = 'status-line error';
+      statusLine.textContent = 'Yeh browser video recording support nahi karta. Chrome ya Edge try karein.';
+      isRecording = false;
+      btnExport.disabled = false;
+      btnPlay.disabled = false;
+      return;
+    }
+
+    const audioOk = ensureAudioGraph();
+    if(audioCtx && audioCtx.state === 'suspended') audioCtx.resume();
+
+    const canvasStream = canvas.captureStream(30);
+    let combinedStream = canvasStream;
+    if(audioOk && audioDestination){
+      const audioTracks = audioDestination.stream.getAudioTracks();
+      if(audioTracks.length) combinedStream = new MediaStream([...canvasStream.getVideoTracks(), ...audioTracks]);
+    }
+
+    recordedChunks = [];
+    exportRes = canvas.width + '\u00d7' + canvas.height;
+    try{
+      mediaRecorder = new MediaRecorder(combinedStream, { mimeType: chosenMime, videoBitsPerSecond: VIDEO_BITRATE, audioBitsPerSecond: AUDIO_BITRATE });
+    }catch(recErr){
+      mediaRecorder = new MediaRecorder(combinedStream, { mimeType: chosenMime });
+    }
+    mediaRecorder.ondataavailable = function(e){ if(e.data && e.data.size > 0) recordedChunks.push(e.data); };
+    mediaRecorder.onstop = finishExport;
+
+    currentClipIdx = 0;
+    globalElapsedBase = 0;
+
+    activateClip(0, function(){
+      if(narrationAudio.src){ narrationAudio.currentTime = 0; narrationAudio.play().catch(function(){}); }
+      mediaRecorder.start();
+      exportLoop();
+    });
+  }
+
+  function exportLoop(){
+    if(!isRecording) return;
+    drawStaticFrame();
+    const elapsed = totalElapsed();
+    const pct = Math.min(100, (elapsed/effectiveDuration)*100);
+    progressFill.style.width = pct + '%';
+    statusLine.textContent = 'Recording... ' + fmtTime(elapsed) + ' / ' + fmtTime(effectiveDuration);
+
+    const usedDur = clips[currentClipIdx].usedDuration;
+    if(getLocalElapsed() >= usedDur - 0.03){
+      advance(function(){ rafId = requestAnimationFrame(exportLoop); }, stopExportRecording);
+      return;
+    }
+    rafId = requestAnimationFrame(exportLoop);
+  }
+
+  function stopExportRecording(){
+    video.pause();
+    narrationAudio.pause();
+    isRecording = false;
+    mediaRecorder.stop();
+  }
+
+  function finishExport(){
+    const blob = new Blob(recordedChunks, { type: chosenMime.split(';')[0] });
+    const ext = chosenMime.indexOf('mp4') !== -1 ? 'mp4' : 'webm';
+    lastBlob = blob;
+    lastFilename = 'caption-video.' + ext;
+    downloadBtn.disabled = false;
+    downloadBtn.textContent = '⬇ Download Video';
+    downloadSize.textContent = exportRes + ' · ' + (blob.size/1024/1024).toFixed(1) + ' MB · ' + ext.toUpperCase();
+    downloadBox.style.display = 'block';
+    progressFill.style.width = '100%';
+    statusLine.className = 'status-line ready';
+    statusLine.textContent = 'Export complete.';
+    btnExport.disabled = false;
+    btnPlay.disabled = false;
+  }
+
+  // ---------- Aspect ratio switch (4:5 Feed / 9:16 Reels & Shorts) ----------
+  const frameWrapEl = document.querySelector('.frame-wrap');
+  const ratioInputs = document.querySelectorAll('input[name="aspectRatio"]');
+  ratioInputs.forEach(function(input){
+    input.addEventListener('change', function(){
+      if(!this.checked) return;
+      if(isRecording){ this.checked = (CANVAS_H === 1280) ? (this.value === '9:16') : (this.value === '4:5'); return; }
+
+      if(this.value === '9:16'){ CANVAS_W = 720; CANVAS_H = 1280; }
+      else { CANVAS_W = 720; CANVAS_H = 900; }
+
+      applyCanvasResolution();
+      if(frameWrapEl) frameWrapEl.style.aspectRatio = CANVAS_W + ' / ' + CANVAS_H;
+
+      layoutCache = null;
+      drawStaticFrame();
+    });
+  });
+
+  drawStaticFrame();
+})();
+</script>
+
+<script>
+(function(){
+  var stickyBar = document.getElementById('stickyExport');
+  var stickyBtn = document.getElementById('stickyExportBtn');
+  var exportCard = document.getElementById('exportCard');
+  if(!stickyBar || !stickyBtn || !exportCard) return;
+
+  stickyBtn.addEventListener('click', function(){
+    exportCard.scrollIntoView({behavior:'smooth', block:'center'});
+  });
+
+  if('IntersectionObserver' in window){
+    var io = new IntersectionObserver(function(entries){
+      var visible = entries[0].isIntersecting;
+      stickyBar.classList.toggle('show', !visible);
+    }, {threshold:0.15});
+    io.observe(exportCard);
+  } else {
+    stickyBar.classList.add('show');
+  }
+})();
+</script>
+
+
+<script>
+(function(){
+  var deck=document.getElementById('deck'), bar=document.getElementById('deckBar');
+  var tabs=[].slice.call(document.querySelectorAll('.deck-tab'));
+  deck.addEventListener('scroll',function(){
+    var f=deck.scrollLeft/(deck.clientWidth||1), i=Math.round(f);
+    bar.style.transform='translateX('+(f*100)+'%)';
+    tabs.forEach(function(t,k){ t.setAttribute('aria-selected', k===i ? 'true':'false'); });
+    document.body.setAttribute('data-slide', i);
+  },{passive:true});
+  tabs.forEach(function(t,k){ t.addEventListener('click',function(){ deck.scrollTo({left:k*deck.clientWidth,behavior:'smooth'}); }); });
+})();
+</script>
+
+<script>
+(function(){
+  var $=function(i){return document.getElementById(i);};
+  var cv=$('coverCanvas'), cx=cv.getContext('2d'), W=1080, H=1350, img=null, raf=0, ov={}, hits=[], dims={w:W,h:H}, move=false, drag=null;
+  var STACK='"Poppins","Noto Sans Devanagari",-apple-system,"Segoe UI",sans-serif';
+  var c={title:$('cvTitle'),size:$('cvSize'),top:$('cvTop'),scrim:$('cvScrim'),zoom:$('cvZoom'),px:$('cvPosX'),py:$('cvPosY'),enh:$('cvEnhance'),caps:$('cvCaps'),tc:$('cvTextColor'),hc:$('cvHiColor'),sub:$('cvSub')};
+  function val(n){ var r=document.querySelector('input[name="'+n+'"]:checked'); return r?r.value:''; }
+  function fnt(sz){ return '800 '+sz+'px '+STACK; }
+  function hexA(h,a){ var n=parseInt(h.slice(1),16); return 'rgba('+(n>>16&255)+','+(n>>8&255)+','+(n&255)+','+a+')'; }
+  function rr(x,y,w,h,r){ cx.beginPath(); cx.moveTo(x+r,y); cx.arcTo(x+w,y,x+w,y+h,r); cx.arcTo(x+w,y+h,x,y+h,r); cx.arcTo(x,y+h,x,y,r); cx.arcTo(x,y,x+w,y,r); cx.closePath(); }
+
+  // "a *b c* d" -> [[{t,hi}...]] per line
+  function parse(text){
+    var n=0;
+    return text.split('\n').map(function(line){
+      var ws=[]; line.split('*').forEach(function(part,i){
+        part.split(/\s+/).filter(Boolean).forEach(function(w){
+          var hi=i%2===1, col=null, o=ov[n]; if(o&&o.t===w){ hi=o.hi; col=o.col; }
+          ws.push({t:w,hi:hi,col:col,id:n}); n++;
+        });
+      });
+      return ws;
+    }).filter(function(l){return l.length;});
+  }
+  function wrap(lines,size,maxW,caps){
+    cx.font=fnt(size); var sp=cx.measureText(' ').width, out=[];
+    lines.forEach(function(words){
+      var cur=[], w=0;
+      words.forEach(function(wd){
+        var t=caps?wd.t.toUpperCase():wd.t, ww=cx.measureText(t).width;
+        if(cur.length && w+sp+ww>maxW){ out.push({ws:cur,w:w,sp:sp}); cur=[]; w=0; }
+        w+=(cur.length?sp:0)+ww; cur.push({t:t,raw:wd.t,hi:wd.hi,col:wd.col,id:wd.id,w:ww});
+      });
+      if(cur.length) out.push({ws:cur,w:w,sp:sp});
+    });
+    return out;
+  }
+
+  function draw(){
+    var style=val('cvStyle'), align=val('cvAlign'), tc=c.tc.value, hc=c.hc.value, sc=c.scrim.value/100;
+    hits=[]; cx.setTransform(1,0,0,1,0,0); cx.clearRect(0,0,W,H); cx.textAlign='left'; cx.textBaseline='middle';
+
+    if(img){
+      var z=c.zoom.value/100, s=Math.max(W/img.width,H/img.height)*z, dw=img.width*s, dh=img.height*s;
+      $('cvZoomVal').textContent=c.zoom.value+'%'; dims={w:dw,h:dh};
+      cx.filter=c.enh.checked?'contrast(1.08) saturate(1.15)':'none';
+      cx.drawImage(img,(W-dw)*c.px.value/100,(H-dh)*c.py.value/100,dw,dh); cx.filter='none';
+    } else {
+      var g=cx.createLinearGradient(0,0,W,H); g.addColorStop(0,'#2A2D3E'); g.addColorStop(1,'#101116'); cx.fillStyle=g; cx.fillRect(0,0,W,H);
+      var rg=cx.createRadialGradient(W*.8,H*.75,0,W*.8,H*.75,W*.8); rg.addColorStop(0,hexA(hc,.28)); rg.addColorStop(1,'rgba(0,0,0,0)'); cx.fillStyle=rg; cx.fillRect(0,0,W,H);
+    }
+    var t=cx.createLinearGradient(0,0,0,H*.7);
+    t.addColorStop(0,'rgba(0,0,0,'+sc+')'); t.addColorStop(.5,'rgba(0,0,0,'+sc*.55+')'); t.addColorStop(1,'rgba(0,0,0,0)');
+    cx.fillStyle=t; cx.fillRect(0,0,W,H*.7);
+    var b=cx.createLinearGradient(0,H*.85,0,H); b.addColorStop(0,'rgba(0,0,0,0)'); b.addColorStop(1,'rgba(0,0,0,'+sc*.5+')');
+    cx.fillStyle=b; cx.fillRect(0,H*.85,W,H*.15);
+
+    // ---- title (auto-shrinks to fit the top ~40%) ----
+    var src=parse(c.title.value), size=+c.size.value, padX=72, boxed=style!=='impact', lines, bp;
+    for(;;){
+      bp=boxed?size*.2:0; lines=wrap(src,size,W-2*padX-2*bp,c.caps.checked);
+      if(size<=44 || lines.length*size*1.3<=H*.4) break; size-=4;
+    }
+    var lh=size*1.3, gap=boxed?size*.09:0, y=H*(c.top.value/100);
+    lines.forEach(function(L,i){
+      var bw=L.w+2*bp, bx=align==='center'?(W-bw)/2:padX, top=y+i*lh, ty=top+(lh-gap)/2, x=bx+bp;
+      cx.font=fnt(size);
+      if(boxed){ cx.fillStyle=style==='marker'?hc:'rgba(10,10,14,.88)'; rr(bx,top,bw,lh-gap,size*.16); cx.fill(); }
+      L.ws.forEach(function(w){
+        var col=w.hi?(w.col||hc):tc;
+        if(style==='marker'){
+          if(w.hi){ cx.fillStyle='#14120A'; rr(x-size*.08,top+size*.06,w.w+size*.16,lh-gap-size*.12,size*.12); cx.fill(); col=w.col||tc; }
+          else col='#14120A';
+        }
+        if(style==='impact'){
+          cx.lineJoin='round'; cx.lineWidth=size*.15; cx.strokeStyle='rgba(8,8,12,.95)';
+          cx.shadowColor='rgba(0,0,0,.5)'; cx.shadowBlur=size*.22; cx.shadowOffsetY=size*.05;
+          cx.strokeText(w.t,x,ty); cx.shadowColor='transparent'; cx.shadowBlur=0; cx.shadowOffsetY=0;
+        }
+        cx.fillStyle=col; cx.fillText(w.t,x,ty);
+        hits.push({x:x-size*.06,y:top,w:w.w+size*.12,h:lh,id:w.id,t:w.raw,hi:w.hi}); x+=w.w+L.sp;
+      });
+    });
+
+    var st=c.sub.value.trim();
+    if(st && lines.length){
+      var fs=size*.34, ph=fs*1.9; cx.font='700 '+fs+'px '+STACK;
+      var pw=cx.measureText(st).width+fs*1.6, px=align==='center'?(W-pw)/2:padX, py=y+lines.length*lh+size*.22;
+      cx.fillStyle=style==='marker'?'#FFFFFF':hc; rr(px,py,pw,ph,ph/2); cx.fill();
+      cx.fillStyle='#14120A'; cx.fillText(st,px+fs*.8,py+ph/2);
+    }
+    $('cvEmpty').style.display=(!img&&!c.title.value.trim())?'flex':'none';
+  }
+  function tapAt(cx0,cy0){
+    var r=cv.getBoundingClientRect(), x=(cx0-r.left)/r.width*W, y=(cy0-r.top)/r.height*H;
+    for(var i=0;i<hits.length;i++){ var h=hits[i];
+      if(x>=h.x&&x<=h.x+h.w&&y>=h.y&&y<=h.y+h.h){ ov[h.id]={t:h.t,hi:!h.hi,col:c.hc.value}; draw(); return; } }
+  }
+  $('cvCropReset').addEventListener('click',function(){ c.zoom.value=100; c.px.value=50; c.py.value=50; draw(); });
+  cv.addEventListener('pointerdown',function(e){ drag={x:e.clientX,y:e.clientY,moved:false}; try{ cv.setPointerCapture(e.pointerId); }catch(_){} });
+  cv.addEventListener('pointermove',function(e){
+    if(!drag) return;
+    var mx=e.clientX-drag.x, my=e.clientY-drag.y;
+    if(!drag.moved){ if(Math.hypot(mx,my)<6) return; drag.moved=true; }
+    if(!img) return;
+    var r=cv.getBoundingClientRect(), dx=mx/r.width*W, dy=my/r.height*H, sx=W-dims.w, sy=H-dims.h;
+    drag.x=e.clientX; drag.y=e.clientY;
+    if(sx<-0.5) c.px.value=Math.max(0,Math.min(100,+c.px.value+dx/sx*100));
+    if(sy<-0.5) c.py.value=Math.max(0,Math.min(100,+c.py.value+dy/sy*100));
+    redraw();
+  });
+  cv.addEventListener('pointerup',function(e){ if(drag && !drag.moved) tapAt(e.clientX,e.clientY); drag=null; });
+  cv.addEventListener('pointercancel',function(){ drag=null; });
+  $('cvReset').addEventListener('click',function(){ ov={}; draw(); });
+  function redraw(){ cancelAnimationFrame(raf); raf=requestAnimationFrame(draw); }
+
+  [c.title,c.size,c.top,c.scrim,c.zoom,c.px,c.py,c.enh,c.caps,c.tc,c.hc,c.sub].forEach(function(e){ e.addEventListener('input',redraw); e.addEventListener('change',redraw); });
+  ['cvStyle','cvAlign'].forEach(function(n){ document.querySelectorAll('input[name="'+n+'"]').forEach(function(r){ r.addEventListener('change',redraw); }); });
+
+  $('cvFile').addEventListener('change',function(){
+    var f=this.files&&this.files[0]; if(!f) return;
+    var im=new Image(); im.onload=function(){ img=im; $('cvFileLabel').textContent='✓ '+f.name; draw(); };
+    im.src=URL.createObjectURL(f);
+  });
+
+  document.querySelectorAll('input[name="cvRatio"]').forEach(function(r){
+    r.addEventListener('change',function(){
+      if(!this.checked) return;
+      H=this.value==='9:16'?1920:1350; cv.width=W; cv.height=H;
+      $('cvFrame').style.aspectRatio=W+' / '+H; $('cvInfo').textContent=W+' × '+H;
+      c.top.value=H>1500?12:6;   // 9:16 mein Reels UI / grid crop se bachne ke liye thoda neeche
+      draw();
+    });
+  });
+
+  $('cvExport').addEventListener('click',function(){
+    draw();
+    var name='cover-'+val('cvRatio').replace(':','x')+'.png', status=$('cvStatus');
+    cv.toBlob(async function(blob){
+      if(!blob){ status.className='status-line error'; status.textContent='Export fail hua, dobara try karein.'; return; }
+      try{
+        var d=(window.claude&&typeof window.claude.use==='function')?await window.claude.use('downloads'):null;
+        if(d){ await d.save({filename:name,data:blob}); status.className='status-line ready'; status.textContent='Saved ✓ '+name; return; }
+      }catch(e){ if(e&&e.code==='declined') return; }
+      var u=URL.createObjectURL(blob), a=document.createElement('a'); a.href=u; a.download=name;
+      document.body.appendChild(a); a.click(); document.body.removeChild(a); setTimeout(function(){URL.revokeObjectURL(u);},4000);
+      status.className='status-line ready'; status.textContent='Downloaded ✓ '+name+' · '+(blob.size/1024/1024).toFixed(1)+' MB';
+    },'image/png');
+  });
+
+  draw();
+  if(document.fonts&&document.fonts.load){
+    Promise.all([document.fonts.load('800 60px "Poppins"'),document.fonts.load('900 60px "Noto Sans Devanagari"')]).catch(function(){}).then(draw);
+  }
+})();
+</script>
+
+</body>
+</html>
