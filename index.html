@@ -228,13 +228,13 @@ input[type=color]{width:100%;height:34px;background:none;border:1px solid var(--
       <div class="card-head"><span class="step">02</span><h2>Caption — type karein ya audio se auto</h2></div>
       <details>
         <summary>Kaise kaam karta hai</summary>
-        <p>Text khud likho, ya <strong>Hindi audio (voiceover)</strong> attach karo — Whisper us Hindi speech ko sunke Devanagari mein transcribe karta hai aur phir yahan wahi caption automatically <strong>Hinglish (Roman script)</strong> mein convert hoke aa jaata hai. Har word ka apna approx start/end time voiceover se hi milta hai, isliye highlight usi word par jaata hai jo us waqt bola ja raha hai — text edit karoge to timing dobara us Hindi audio se hi adjust ho jaati hai. Audio attach karne par woh export ki soundtrack ban jaati hai, aur attached video/images us audio ki poori length ke hisaab se adjust ho jaate hain — audio aur video/caption ekdum saath shuru aur saath khatam hote hain.</p>
+        <p>Text khud likho, ya Hindi/Hinglish audio (voiceover) attach karo — auto-transcribe isse <strong>Devanagari</strong> script mein likhega (jaise "मैं जा रहा हूँ"). <strong>Exact word sync</strong> sirf Roman/English letters par kaam karta hai, isliye Devanagari transcript aane ke baad use caption box mein khud Roman/Hinglish mein rewrite karein (jaise "main ja raha hun") — text edit karte hi wo audio se turant dobara align ho jaata hai, har word ki apni real start/end timing ke saath. Highlight ussi word par jaata hai jo us waqt bola ja raha hai. Audio attach karne par woh export ki soundtrack ban jaati hai, aur attached video/images us audio ki poori length ke hisaab se adjust ho jaate hain — audio aur video/caption ekdum saath shuru aur saath khatam hote hain.</p>
       </details>
       <label class="file-drop" for="audioInput">
-        <span id="audioDropLabel">Hindi audio track (optional, auto-transcribe → Hinglish caption)</span>
+        <span id="audioDropLabel">Audio track (optional, auto-transcribe)</span>
         <input type="file" id="audioInput" accept="audio/*">
       </label>
-      <label class="opt-row" style="opacity:.5;"><input type="checkbox" id="exactSyncToggle" disabled><span><strong>Exact word sync</strong> — abhi disabled: yeh word-to-word forced-align model sirf English phonemes samajhta hai, Hindi audio par kaam nahi karta. Timing Whisper ke apne word-timestamps se aati hai (approx sync).</span></label>
+      <label class="opt-row"><input type="checkbox" id="exactSyncToggle" checked><span><strong>Exact word sync</strong> — har word audio se word-to-word align (extra ~95MB model, sirf pehli baar)</span></label>
       <label class="opt-row"><input type="checkbox" id="useScriptToggle"><span>Meri likhi script use karo — caption box ka text hi transcript hai, Whisper skip (audio attach karne se pehle text paste karein)</span></label>
       <label class="opt-row"><input type="checkbox" id="beatSyncToggle" checked><span><strong>Beat-sync cuts</strong> — image-to-image cut timing audio ke energy-hits (beats) ke paas snap hoti hai</span></label>
       <div class="status-line" id="transcribeStatus" style="display:none;"></div>
@@ -265,7 +265,7 @@ input[type=color]{width:100%;height:34px;background:none;border:1px solid var(--
 </div>
 
 <footer class="foot">
-  Sab browser mein hi process hota hai, koi upload nahi. Export webm/mp4 mein hota hai, minimum 1080p (4:5 = 1080×1350, 9:16 = 1080×1920) aur 12 Mbps bitrate par. <strong>Auto-transcribe</strong> ek baar multilingual Whisper model (~140-190MB, Hindi audio ke liye) internet se load karta hai, phir Devanagari transcript ko yahin browser mein Hinglish (Roman) mein convert kar deta hai — Claude ke artifact preview mein sandbox ki wajah se kaam nahi karega, isliye yeh file khud host/open karke test karein.
+  Sab browser mein hi process hota hai, koi upload nahi. Export webm/mp4 mein hota hai, minimum 1080p (4:5 = 1080×1350, 9:16 = 1080×1920) aur 12 Mbps bitrate par. <strong>Auto-transcribe</strong> ab Hindi/Hinglish audio support karta hai aur Devanagari transcript deta hai (ek baar multilingual Whisper model, ~140-150MB, load hota hai) — <strong>Exact word sync</strong> sirf Roman/English text par kaam karta hai (ek baar alignment model ~95MB load hota hai), isliye Devanagari transcript ko caption box mein Roman/Hinglish mein rewrite karein. Claude ke artifact preview mein sandbox ki wajah se kaam nahi karega, isliye yeh file khud host/open karke test karein.
 </footer>
 </section>
 
@@ -505,6 +505,7 @@ input[type=color]{width:100%;height:34px;background:none;border:1px solid var(--
   let transcribing = false;
   let effectiveMaxSeconds = MAX_TOTAL_SECONDS;
   let rawClipsCache = null;
+  let whisperPipelinePromise = null;
   let transformersPromise = null;  // @xenova/transformers module, shared by Whisper and the forced-alignment model
   let ctcModelPromise = null, ctcVocabCache = null;
   let ctcEmissions = null;         // cached wav2vec2 log-probs of the narration: {data,F,V,vocab,blank,delim} -> exact word timing for ANY caption text
@@ -975,6 +976,27 @@ input[type=color]{width:100%;height:34px;background:none;border:1px solid var(--
     updateExportReady();
     drawStaticFrame();
     refreshSyncStatus(true);
+  });
+
+  // Pasted paragraph/script text always gets converted to Title Case (first letter of every word capitalized),
+  // so caption text looks consistent regardless of how it was written in the source.
+  paragraphInput.addEventListener('paste', function(e){
+    var cd = e.clipboardData || window.clipboardData;
+    if(!cd) return;
+    var text = cd.getData('text');
+    if(text == null) return;
+    e.preventDefault();
+    var titled = toProperCase(text);
+    if(document.execCommand && document.execCommand('insertText', false, titled)){
+      // execCommand handled the insert + undo stack
+    } else {
+      var start = paragraphInput.selectionStart, end = paragraphInput.selectionEnd;
+      var val = paragraphInput.value;
+      paragraphInput.value = val.slice(0, start) + titled + val.slice(end);
+      var pos = start + titled.length;
+      paragraphInput.selectionStart = paragraphInput.selectionEnd = pos;
+      paragraphInput.dispatchEvent(new Event('input', { bubbles: true }));
+    }
   });
 
   syncOffsetEl.addEventListener('input', function(){
@@ -1522,159 +1544,13 @@ input[type=color]{width:100%;height:34px;background:none;border:1px solid var(--
     return transformersPromise;
   }
 
-  // Multilingual Whisper (not the .en-only tiny model) so Hindi speech transcribes correctly.
-  // 'small' gives noticeably more reliable Hindi decoding than 'base' — 'base' is prone to sliding
-  // into the wrong script (Urdu/Arabic instead of Devanagari) on accented or synthetic (TTS) voices,
-  // and to repetition hallucination loops near silence. Bigger one-time download (~250MB vs ~140MB).
-  const WHISPER_MODEL_ID = 'Xenova/whisper-small';
-
-  // Whisper's actual forward pass is a long, mostly-synchronous WASM computation — running it on
-  // the main thread blocks all repaints and timers for that whole stretch, which is exactly why the
-  // status text (and any % ticker) used to freeze mid-transcription. Running it in a Worker keeps the
-  // main thread free so the UI (and our progress ticker) keeps updating live while it computes.
-  let whisperWorker = null;
-  let whisperWorkerReqId = 0;
-  const whisperWorkerCallbacks = {};
-
-  function getWhisperWorker(){
-    if(!whisperWorker){
-      const code = [
-        'let pipelinePromise = null;',
-        'function getPipeline(modelId, onProgress){',
-        '  if(!pipelinePromise){',
-        '    pipelinePromise = import(' + JSON.stringify(TRANSFORMERS_URL) + ').then(function(mod){',
-        '      return mod.pipeline("automatic-speech-recognition", modelId, {',
-        '        quantized: true,',
-        '        progress_callback: function(p){',
-        '          if(p && p.status === "progress" && typeof p.progress === "number" && /onnx/i.test(p.file || "")){',
-        '            onProgress(p.progress);',
-        '          }',
-        '        }',
-        '      });',
-        '    });',
-        '    pipelinePromise.catch(function(){ pipelinePromise = null; });',
-        '  }',
-        '  return pipelinePromise;',
-        '}',
-        'self.onmessage = async function(e){',
-        '  const msg = e.data;',
-        '  if(!msg || msg.type !== "transcribe") return;',
-        '  try{',
-        '    const transcriber = await getPipeline(msg.modelId, function(pct){ self.postMessage({ type: "progress", id: msg.id, pct: pct }); });',
-        '    const output = await transcriber(msg.audio, msg.options);',
-        '    self.postMessage({ type: "result", id: msg.id, output: output });',
-        '  }catch(err){',
-        '    self.postMessage({ type: "error", id: msg.id, message: (err && err.message) || String(err) });',
-        '  }',
-        '};'
-      ].join('\n');
-      const blob = new Blob([code], { type: 'text/javascript' });
-      whisperWorker = new Worker(URL.createObjectURL(blob), { type: 'module' });
-      whisperWorker.onmessage = function(e){
-        const msg = e.data, cb = whisperWorkerCallbacks[msg.id];
-        if(!cb) return;
-        if(msg.type === 'progress'){ cb.onProgress && cb.onProgress(msg.pct); }
-        else if(msg.type === 'result'){ cb.resolve(msg.output); delete whisperWorkerCallbacks[msg.id]; }
-        else if(msg.type === 'error'){ cb.reject(new Error(msg.message)); delete whisperWorkerCallbacks[msg.id]; }
-      };
-      whisperWorker.onerror = function(err){
-        Object.keys(whisperWorkerCallbacks).forEach(function(id){
-          whisperWorkerCallbacks[id].reject(err instanceof Error ? err : new Error('Whisper worker failed'));
-          delete whisperWorkerCallbacks[id];
-        });
-        whisperWorker = null;   // let the next attempt spin up a fresh worker
-      };
+  function getWhisperPipeline(){
+    if(!whisperPipelinePromise){
+      whisperPipelinePromise = getTransformers()
+        .then(function(mod){ return mod.pipeline('automatic-speech-recognition', 'Xenova/whisper-base'); });
+      whisperPipelinePromise.catch(function(){ whisperPipelinePromise = null; });
     }
-    return whisperWorker;
-  }
-
-  function transcribeInWorker(modelId, audio, options, onProgress){
-    return new Promise(function(resolve, reject){
-      const worker = getWhisperWorker();
-      const id = ++whisperWorkerReqId;
-      whisperWorkerCallbacks[id] = { resolve: resolve, reject: reject, onProgress: onProgress };
-      worker.postMessage({ type: 'transcribe', id: id, modelId: modelId, audio: audio, options: options });
-    });
-  }
-
-  // ---------- Devanagari -> Hinglish (Roman script) transliteration ----------
-  // Whisper transcribes Hindi speech into Devanagari script; captions here need Hinglish, so every
-  // transcript is romanized before it lands in the caption box or gets matched to word timestamps.
-  // Simple rule-based mapping (independent vowels, matras, virama-joined conjuncts, anusvara/visarga)
-  // plus a schwa-deletion heuristic (drop a word's trailing inherent "a" once it has 2+ consonants,
-  // e.g. "कमल" -> "kamal" not "kamala") so the output reads like natural Hinglish.
-  var DEV_VOWELS = {'अ':'a','आ':'aa','इ':'i','ई':'ee','उ':'u','ऊ':'oo','ऋ':'ri','ॠ':'ri',
-    'ए':'e','ऐ':'ai','ओ':'o','औ':'au'};
-  var DEV_MATRAS = {'ा':'aa','ि':'i','ी':'ee','ु':'u','ू':'oo','ृ':'ri','ॄ':'ri',
-    'े':'e','ै':'ai','ो':'o','ौ':'au'};
-  var DEV_CONS = {
-    'क':'k','ख':'kh','ग':'g','घ':'gh','ङ':'ng','च':'ch','छ':'chh','ज':'j','झ':'jh','ञ':'ny',
-    'ट':'t','ठ':'th','ड':'d','ढ':'dh','ण':'n','त':'t','थ':'th','द':'d','ध':'dh','न':'n',
-    'प':'p','फ':'ph','ब':'b','भ':'bh','म':'m','य':'y','र':'r','ल':'l','व':'v',
-    'श':'sh','ष':'sh','स':'s','ह':'h',
-    'क़':'q','ख़':'kh','ग़':'g','ज़':'z','ड़':'r','ढ़':'rh','फ़':'f','य़':'y','ऱ':'r','ऴ':'l','ळ':'l'
-  };
-  var DEV_CONJ = {'क्ष':'ksh','त्र':'tr','ज्ञ':'gya','श्र':'shr'};
-  var DEV_DIGITS = {'०':'0','१':'1','२':'2','३':'3','४':'4','५':'5','६':'6','७':'7','८':'8','९':'9'};
-  var DEV_VIRAMA='्', DEV_ANUSVARA='ं', DEV_CHANDRA='ँ', DEV_VISARGA='ः', DEV_NUKTA='़', DEV_AVAGRAHA='ऽ';
-  // Nukta letters (ज़/ड़/फ़ etc.) are NOT recomposed by NFC (Devanagari nukta forms are a Unicode
-  // composition exclusion), so a base+nukta sequence has to be caught here and remapped explicitly.
-  var DEV_NUKTA_MAP = {'क':'q','ख':'kh','ग':'g','ज':'z','ड':'r','ढ':'rh','फ':'f','य':'y'};
-
-  function transliterateDevWord(word){
-    var out='', i=0, n=word.length, pendingA=false, consCount=0;
-    function flush(){ if(pendingA){ out+='a'; pendingA=false; } }
-    while(i<n){
-      var three=word.substr(i,3);
-      if(DEV_CONJ[three]){ flush(); out+=DEV_CONJ[three]; pendingA=true; consCount++; i+=3; continue; }
-      var ch=word[i];
-      if(DEV_VOWELS[ch]){ flush(); out+=DEV_VOWELS[ch]; i++; continue; }
-      if(DEV_DIGITS[ch]){ flush(); out+=DEV_DIGITS[ch]; i++; continue; }
-      if(ch===DEV_NUKTA || ch===DEV_AVAGRAHA){ i++; continue; }
-      if(ch===DEV_ANUSVARA || ch===DEV_CHANDRA){ pendingA=false; out+='n'; i++; continue; }
-      if(ch===DEV_VISARGA){ pendingA=false; out+='h'; i++; continue; }
-      if(ch===DEV_VIRAMA){ pendingA=false; i++; continue; }
-      if(DEV_MATRAS[ch]){ pendingA=false; out+=DEV_MATRAS[ch]; i++; continue; }
-      if(DEV_CONS[ch]){
-        flush();
-        if(word[i+1]===DEV_NUKTA && DEV_NUKTA_MAP[ch]){ out+=DEV_NUKTA_MAP[ch]; i+=2; }
-        else { out+=DEV_CONS[ch]; i++; }
-        pendingA=true; consCount++; continue;
-      }
-      flush();
-      if(ch==='।'||ch==='॥'){ out+='.'; i++; continue; }
-      out+=ch; i++;
-    }
-    if(pendingA && consCount>1) pendingA=false; else flush();
-    return out;
-  }
-
-  // ---------- Hallucination cleanup ----------
-  // Whisper-base/small on Hindi occasionally (a) slips into the wrong script entirely — usually
-  // Urdu/Arabic, sometimes an unrelated Indic script like Tamil — instead of Devanagari, and
-  // (b) falls into a degenerate loop repeating one short token over and over, typically near
-  // trailing silence. devanagariToHinglish() only ever touches the Devanagari Unicode block, so
-  // wrong-script text used to pass straight through untouched and show up verbatim in the caption.
-  // Since this app only ever expects Hindi (Devanagari) or already-Latin words, anything outside
-  // those + digits/punctuation/whitespace is mistranscription, not real content — drop it.
-  var ALLOWED_TEXT_RE = /[^\u0900-\u097F\u0020-\u007E\u2018\u2019\u201C\u201D\u2013\u2014\s]/g;
-  function stripWrongScript(str){
-    if(!str) return str;
-    return String(str).replace(ALLOWED_TEXT_RE, '').replace(/\s{2,}/g, ' ').trim();
-  }
-  // Cuts off a run of 4+ consecutive repeats of the same (short) word — the classic Whisper
-  // repetition-loop hallucination — keeping just one copy instead of dozens.
-  function trimHallucinationLoop(str){
-    if(!str) return str;
-    return String(str).replace(/\b(\S{1,12})(?:\s+\1){3,}\b/gi, '$1');
-  }
-
-  function devanagariToHinglish(str){
-    if(!str) return str;
-    var cleaned = trimHallucinationLoop(stripWrongScript(str));
-    // NFC first: nukta letters (ज़/ड़/फ़ etc.) can arrive as base+nukta and must recompose to
-    // match the DEV_CONS keys above, or they'd silently fall back to the non-nukta sound (j vs z).
-    return cleaned.normalize('NFC').replace(/[\u0900-\u097F]+/g, function(run){ return transliterateDevWord(run); });
+    return whisperPipelinePromise;
   }
 
   function getCtcModel(mod){
@@ -1683,7 +1559,7 @@ input[type=color]{width:100%;height:34px;background:none;border:1px solid var(--
         quantized: true,
         progress_callback: function(p){
           if(p && p.status === 'progress' && typeof p.progress === 'number' && /onnx/i.test(p.file || '')){
-            transcribeStatus.textContent = 'Exact-sync model download ho raha hai: ' + p.progress.toFixed(2) + '% (sirf pehli baar)';
+            transcribeStatus.textContent = 'Exact-sync model download ho raha hai: ' + Math.round(p.progress) + '% (sirf pehli baar)';
           }
         }
       });
@@ -1732,7 +1608,7 @@ input[type=color]{width:100%;height:34px;background:none;border:1px solid var(--
     const model = await getCtcModel(mod);
     const vocab = await loadCtcVocab();
     const em = await computeEmissions(samples16k, function(raw){ return runCtcChunk(mod, model, raw); }, function(c, n){
-      transcribeStatus.textContent = 'Exact sync: voiceover analyze ho raha hai: ' + (((c + 1) / n) * 100).toFixed(2) + '%...';
+      transcribeStatus.textContent = 'Exact sync: voiceover analyze ho raha hai (' + (c + 1) + '/' + n + ')...';
     });
     if(!em) throw new Error('audio too short for alignment');
     let maxId = 0;
@@ -1841,22 +1717,6 @@ input[type=color]{width:100%;height:34px;background:none;border:1px solid var(--
     }
   }
 
-  // For steps with no real progress signal (audio decode, the Whisper forward pass itself),
-  // ticks a live estimated % against a guessed duration so the status text keeps moving instead
-  // of sitting frozen on one line — capped short of 100% since it's a guess, then the caller's
-  // own next status line replaces it the moment the step actually finishes.
-  function startEtaProgress(label, estimateMs, shouldPause){
-    const start = Date.now();
-    const el = transcribeStatus;
-    el.textContent = label + ': 0.00% (approx)';
-    const timer = setInterval(function(){
-      if(shouldPause && shouldPause()) return;   // a real progress event landed very recently — let it stay visible
-      const p = Math.min(97, (Date.now() - start) / estimateMs * 97);
-      el.textContent = label + ': ' + p.toFixed(2) + '% (approx)';
-    }, 150);
-    return function stop(){ clearInterval(timer); };
-  }
-
   async function transcribeAudioFile(file){
     transcribing = true;
     updateExportReady();
@@ -1873,32 +1733,16 @@ input[type=color]{width:100%;height:34px;background:none;border:1px solid var(--
       try{ voice = analyzeVoice(decoded.data, 16000, AUDIO_LEAD_PAD); }catch(vErr){ console.warn('Voice analysis skipped:', vErr); voice = null; }
       try{ audioOnsets = detectOnsets(decoded.data, 16000); }catch(oErr){ console.warn('Onset/beat detection skipped:', oErr); audioOnsets = []; }
 
-      // Exact-word CTC forced-alignment only understands English phonemes, so it's disabled for
-      // Hindi audio — timing always comes from Whisper's own word-level timestamps instead.
-      const wantExact = false;
+      const wantExact = exactSyncToggle.checked;
       const keepScript = useScriptToggle.checked && getWords().length > 0;   // caption box already holds the script -> it stays as is
       let whisperText = null;
 
       async function runWhisper(){
-        transcribeStatus.textContent = 'Speech model load ho raha hai (pehli baar ~250-350MB, thoda time lagega)...';
-        let lastDownloadProgressAt = 0;
-        const stopEta = startEtaProgress(
-          'Transcribe ho raha hai (Hindi)',
-          Math.max(3000, narrationDuration * 1000 * 2.5),
-          function(){ return Date.now() - lastDownloadProgressAt < 500; }
-        );
-        let output;
-        try{
-          output = await transcribeInWorker(WHISPER_MODEL_ID, decoded.data, {
-            return_timestamps: 'word', chunk_length_s: 30, stride_length_s: 5,
-            language: 'hindi', task: 'transcribe'   // force Hindi decoding (Devanagari), romanized to Hinglish below
-          }, function(pct){
-            lastDownloadProgressAt = Date.now();
-            transcribeStatus.textContent = 'Speech model download ho raha hai: ' + pct.toFixed(2) + '% (sirf pehli baar)';
-          });
-        } finally { stopEta(); }
-        const chunks = (output.chunks || []).filter(function(c){ return c.text && c.text.trim(); })
-          .map(function(c){ return { text: devanagariToHinglish(c.text), timestamp: c.timestamp }; });
+        transcribeStatus.textContent = 'Speech model load ho raha hai (pehli baar ~140-150MB, thoda time lagega)...';
+        const transcriber = await getWhisperPipeline();
+        transcribeStatus.textContent = 'Transcribe ho raha hai...';
+        const output = await transcriber(decoded.data, { return_timestamps: 'word', chunk_length_s: 30, stride_length_s: 5, language: 'hindi', task: 'transcribe' });
+        const chunks = (output.chunks || []).filter(function(c){ return c.text && c.text.trim(); });
 
         // Whisper stitches ~30s chunks together and its clock can drift a little per chunk. Only matters for the
         // fallback timing: scale so the last detected word lines up with where the voice really ends.
@@ -1916,11 +1760,20 @@ input[type=color]{width:100%;height:34px;background:none;border:1px solid var(--
             end: (c.timestamp[1] != null ? c.timestamp[1] : c.timestamp[0]) * driftScale + AUDIO_LEAD_PAD
           };
         });
-        whisperText = devanagariToHinglish((output.text || '').trim());
+        whisperText = (output.text || '').trim();
       }
 
-      // Whisper is needed for the text (unless the caption box already has the script) and as the timing source.
+      // Whisper is needed for the text (unless the caption box already has the script) and as a fallback timing source.
       if(!(wantExact && keepScript)) await runWhisper();
+      if(wantExact){
+        try{
+          ctcEmissions = await buildCtcEmissions(decoded.data);
+        }catch(exactErr){
+          console.warn('Exact word sync unavailable, falling back to Whisper timing:', exactErr);
+          ctcEmissions = null;
+          if(!wordTimestamps) await runWhisper();
+        }
+      }
       if(!keepScript && whisperText !== null) paragraphInput.value = toProperCase(whisperText);
       invalidateWordTimes();
 
@@ -1945,7 +1798,7 @@ input[type=color]{width:100%;height:34px;background:none;border:1px solid var(--
       voice = null;
       audioOnsets = [];
       invalidateWordTimes();
-      audioDropLabel.textContent = 'Hindi audio track choose karein (optional, auto-transcribe)';
+      audioDropLabel.textContent = 'Audio track choose karein (optional, auto-transcribe)';
       transcribeStatus.className = 'status-line error';
       transcribeStatus.textContent = 'Auto-transcribe fail ho gaya (internet ya browser support issue). Neeche paragraph khud type kar sakte ho.';
       syncRow.style.display = 'none';
